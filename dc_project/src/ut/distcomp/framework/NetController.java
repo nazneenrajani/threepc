@@ -68,7 +68,7 @@ public class NetController {
 				outSockets[process] = null;
 				try{
 					initOutgoingConn(process);
-                        		outSockets[process].sendMsg(msg);	
+                    outSockets[process].sendMsg(msg);	
 				} catch(IOException e1){
 					if (outSockets[process] != null) {
 						outSockets[process].cleanShutdown();

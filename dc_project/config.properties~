@@ -1,5 +1,0 @@
-#this is property file
-NumProcesses=5
-procNum=5
-host=localhost
-port=2

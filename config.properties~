@@ -1,0 +1,9 @@
+#this is property file
+NumProcesses=3
+#procNum=2
+host0=localhost
+host1=localhost
+host2=localhost 
+port0=1234
+port1=1235
+port2=1236

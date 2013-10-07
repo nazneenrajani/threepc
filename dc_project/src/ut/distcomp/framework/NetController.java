@@ -119,8 +119,9 @@ public class NetController {
 		}
 		List<List<String>> retobjs = new ArrayList<List<String>>();
 		for(String s:objs){
-			String sender = s.split("@@")[1];
-			String msg = s.split("@@")[0];
+			String[] temp = s.split("@@");
+			String sender = temp[1];
+			String msg = temp[0];
 			List<String> tmp = new ArrayList<String>();
 			tmp.add(sender);
 			tmp.add(msg);

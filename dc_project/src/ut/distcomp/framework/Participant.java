@@ -1,94 +1,216 @@
 package ut.distcomp.framework;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.FileHandler;
-import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
-import sun.awt.geom.Curve;
 
 public class Participant {
 	static int id;
-	int viewNumber;
-	PlayList playList;
+	static int lastCoordinator;
+	static PlayList playList;
 	static Config conf;
 	static NetController nc;  
 	static FileHandler fh;
 	static List<List<String>> participant_recvdMsg;
-
+	static BufferedWriter dtlog;
+	static BufferedReader dtlogReader = null;
 	public static void main(String[] args) throws FileNotFoundException, IOException{ 
 		id=Integer.parseInt(args[0]);
+		lastCoordinator = 1;
 		conf = new Config("/home/nazneen/workspace/threepc/config.properties");
-		conf.logger.info("Process "+id+" started");
+		//conf.logger.info("Process "+id+" started");
+		Boolean isRecoveryMode = false;
+		File file = new File("/home/nazneen/logs/participant_"+id+".DTlog");
+		if (!file.exists()) 
+			file.createNewFile();
+		else
+			isRecoveryMode = true;
+		FileWriter fw = new FileWriter(file.getAbsoluteFile());
+		dtlog = new BufferedWriter(fw);
+		dtlogReader = new BufferedReader(new FileReader(file));
 		try {  
-			// This block configure the logger with handler and formatter  
-			fh = new FileHandler("/home/nazneen/logs/participant_"+id+".log");  
+			// This block configure the logger with handler and formatter
+			if (!isRecoveryMode) 
+				fh = new FileHandler("/home/nazneen/logs/participant_"+id+".log",false);
+			else{
+				fh = new FileHandler("/home/nazneen/logs/participant_"+id+".log",true);
+				DTLogWrite("Recovered from crash");
+			}
 			conf.logger.addHandler(fh);
 			SimpleFormatter formatter = new SimpleFormatter();  
 			fh.setFormatter(formatter); 
 			conf.logger.info("Process "+id + " initialized");
 		} catch (SecurityException e) {  
 			e.printStackTrace();  
-		} catch (IOException e) {  
+		} catch (IOException e) { 
 			e.printStackTrace();  
 		}  
 		conf.procNum=id;
 		nc = new NetController(conf);
-		Boolean flag=true;
-		while(flag){
-			List<String> msg_history = null;
-			participant_recvdMsg = nc.getReceivedMsgs();
-			if(!participant_recvdMsg.isEmpty()){
-				String[] message = null;
-				for(List<String> command: participant_recvdMsg){
-					message = command.get(1).split("##");
-					//msg_history.add(message[0]);
-					//TODO Check message order
-					switch(message[0]){
-					case "INVOKE_3PC":
-						conf.logger.info("Received "+command+" from Controller");
-						Boolean finalDecision = invokeThreePC(message[1],message[2],message[3]);
-						if(finalDecision)
-							nc.sendMsg(0,"COMMIT");
-						else
-							nc.sendMsg(0,"ABORT");
-						break;
-					case "VOTE_REQ":
-						log("Received VOTE_REQ");
-						castVote(message[1],message[2],message[3]);
-						waitForDecision();
-						break;
-					case "SHUTDOWN":
-						nc.shutdown();
-						flag=false;
-						break;
-					default:
-						conf.logger.severe("invalid msg received " + message[0]);
+
+		DTLogWrite("START");
+		if(!isRecoveryMode){
+			Boolean flag=true;
+			while(flag){
+				List<String> msg_history = null;
+				participant_recvdMsg = nc.getReceivedMsgs();
+				if(!participant_recvdMsg.isEmpty()){
+					String[] message = null;
+					for(List<String> command: participant_recvdMsg){
+						message = command.get(1).split("##");
+						//msg_history.add(message[0]);
+						//TODO Check message order
+						switch(message[0]){
+						case "INVOKE_3PC":
+							//DTLogWrite("INVOKE_3PC");
+							conf.logger.info("Received "+command+" from Controller");
+							Boolean finalDecision = invokeThreePC(message[1],message[2],message[3]);
+							if(finalDecision)
+								nc.sendMsg(0,"COMMIT");
+							else
+								nc.sendMsg(0,"ABORT");
+							break;
+						case "VOTE_REQ":
+							DTLogWrite("VOTE_REQ");
+							log("Received VOTE_REQ");
+							Boolean myVote = castVote(message[1],message[2],message[3]);
+							if(!myVote){
+								DTLogWrite("ABORT");
+								log("ABORT");
+								abort();
+							}
+							else
+								waitForDecision();
+							break;
+						case "SHUTDOWN":
+							DTLogWrite("SHUTDOWN");
+							shutdown();
+							flag=false;
+							break;
+						default:
+							conf.logger.severe("invalid msg received " + message[0]);
+						}
 					}
 				}
 			}
 		}
+		else{
+			String[] s =  returnLastLog();
+			String lastState = s[0];
+			lastCoordinator = Integer.parseInt(s[1]);
+			switch(lastState){
+			case "START":
+				DTLogWrite("ABORT");
+				log("ABORT after recovery");
+				abort();
+				break;
+			case "VOTE_REQ":
+				DTLogWrite("ABORT");
+				log("ABORT after recovery");
+				abort();
+				break;
+			case "YES":
+				log("Running termination protocol as participant");
+				participantRecovery(); // TODO maybe change for coordinator failure case
+				break;
+			case "NO":
+				DTLogWrite("ABORT");
+				log("ABORT after recovery");
+				abort();
+				break;
+			case "PRECOMMIT":
+				log("Running termination protocol as participant");
+				participantRecovery(); // TODO maybe change for coordinator failure case
+				break;
+			case "COMMIT":
+				log("I had committed before crash");
+				commit();
+				break;
+			case "ABORT":
+				log("I had aborted before crash");
+				abort();
+				break;
+			case "INVOKE_3PC":
+				break;
+			default:
+				conf.logger.severe("Bad state in DTLog");
+				break;
+			}
+		}
 	}
 
-	private static void waitForDecision() {
+	private static void participantRecovery() {
+		broadcast("FINALDECISION_REQ");
+		while(true){
+			//TODO timeout > all timeouts
+			List<List<String>> recMsg = nc.getReceivedMsgs();
+			if(!recMsg.isEmpty()){
+				String decision = recMsg.get(0).get(1);
+				if(decision.equals("COMMIT")){
+					DTLogWrite("COMMIT");
+					commit();
+				}	
+				else{
+					DTLogWrite("ABORT");
+					abort();
+				}
+				break;
+			}
+		}
+	}
+
+	private static void commit() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	private static void abort() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	private static String[] returnLastLog() {	 
+		String sCurrentLine = ""; 
+		try {
+			while ((sCurrentLine = dtlogReader.readLine()) != null) {
+				;
+			}
+		} catch (IOException e) {
+			e.printStackTrace();
+		}		
+		return sCurrentLine.split("\t");
+	}
+
+	private static void waitForDecision() throws IOException {
+		//TODO timeout, election
 		while(true){
 			List<List<String>> recMsg = nc.getReceivedMsgs();
 			for(List<String> s : recMsg){
 				if(!recMsg.isEmpty()){
 					String msg = s.get(1);
 					if(msg.equals("ABORT")){
+						DTLogWrite("ABORT");
 						log("ABORTING");
 						return;
 					}
 					else if(msg.equals("PRECOMMIT")){
+						DTLogWrite("PRECOMMIT");
 						log("Received PRECOMMIT");
-						nc.sendMsg(1, "ACK");
+						nc.sendMsg(getCoordinator(), "ACK");
 						while(true){
+							//TODO timeout and election
 							List<List<String>> commitMsg = nc.getReceivedMsgs();
 							if(!commitMsg.isEmpty()){
+								DTLogWrite("COMMIT");
 								log("Committing");
 								return;
 							}
@@ -101,7 +223,7 @@ public class Participant {
 		}
 	}
 
-	private static void castVote(String command, String param1, String param2) {
+	private static Boolean castVote(String command, String param1, String param2) {
 		switch(command){
 		case "add":
 			conf.logger.info("Received add command");
@@ -113,10 +235,13 @@ public class Participant {
 			conf.logger.info("Received edit command");
 			break;
 		}
-		if(conf.procNum==3)
-			nc.sendMsg(1, "NO");
-		else
-			nc.sendMsg(1, "YES");
+		//if(conf.procNum==3)
+		//nc.sendMsg(getCoordinator(), "NO");
+		//else
+		Boolean vote = true;
+		DTLogWrite("YES");
+		nc.sendMsg(getCoordinator(), "YES");
+		return vote;
 	}
 	/**/	
 	/*
@@ -142,7 +267,8 @@ public class Participant {
 		return recvMsgs;	
 	}
 
-	public void shutdown() {
+	public static void shutdown() throws IOException {
+		dtlog.close();
 		nc.shutdown();		
 	}
 
@@ -150,7 +276,8 @@ public class Participant {
 		// Vote REQ
 		log("Sending VOTE_REQ");
 		broadcast("VOTE_REQ##"+message+"##"+s1+"##"+s2);
-
+		DTLogWrite("START_3PC");
+		DTLogWrite("YES");
 		// Collect votes
 		List<String> exp = new ArrayList<String>();
 		exp.add("YES");
@@ -158,26 +285,30 @@ public class Participant {
 		List<String> votes=collectResults(exp);	
 
 		// Decide "PC" or Abort
+		log(votes.toString());
 		boolean isAbort = false;
 		for(String vote : votes){
 			if(vote.equals("NO")){
 				isAbort = true;
 				log("Deciding ABORT");
-				broadcast("ABORT");
+				DTLogWrite("ABORT");
+				broadcast("ABORT"); //TODO only to yes ppl
 				return false;
 			}			
 		}
 		if(!isAbort){
-			broadcast("PRECOMMIT");
+			DTLogWrite("PRECOMMIT");
 			log("Decided PRECOMMIT");
+			broadcast("PRECOMMIT");
 		}
 
 		//may need to send abort else send rpecommti and wait for ack
 		exp = new ArrayList<String>();
 		exp.add("ACK");
 		List<String> acks=collectResults(exp);
-		broadcast("COMMIT");
+		DTLogWrite("COMMIT");
 		log("Decided COMMIT");
+		broadcast("COMMIT");
 		// Send "Commit" 
 
 		return true;
@@ -191,22 +322,31 @@ public class Participant {
 
 	static List<String> collectResults(List<String> expectedAnswers)
 	{
-		Boolean[] check = new Boolean[conf.numProcesses-1];
+		Boolean[] check = new Boolean[conf.numProcesses];
+		for(int j = 0; j< check.length; j++)
+			check[j]=false;
 		check[conf.procNum] = true;
+		check[0] = true;
 		List<String> votes = new ArrayList<String>();
-		while(true){
+		//log("Entered collectResuilts");
+		while(true){ // TODO TINEOUT
 			List<List<String>> currVotes= nc.getReceivedMsgs();
-			for(List<String> s:currVotes){
-				check[Integer.parseInt(s.get(0))] = true;
+			//log(currVotes.toString());
+			for(int k = 0; k < currVotes.size();k++){
+				List<String> s = currVotes.get(k);
+				check[Integer.parseInt(s.get(0))] = true; 
 				if(!expectedAnswers.contains(s.get(1))){
 					conf.logger.severe("Invalid response received "+s);
 				}	
-				else
+				else{
 					votes.add(s.get(1));
+					//log(votes.toString());
+				}
 			}
 			Boolean checkall = true;
 			for(Boolean t: check)
 				checkall = checkall && t;
+			//log(checkall.toString());
 			if(votes.size()==conf.numProcesses-2 && checkall)
 				break;
 		}
@@ -215,5 +355,17 @@ public class Participant {
 
 	static void log(String msg){
 		conf.logger.info(msg);
+	}
+
+	static void DTLogWrite(String msg){
+		try {
+			dtlog.write(msg+"\t"+getCoordinator()+"\n");
+			dtlog.flush();
+		} catch (IOException e) {
+			conf.logger.severe(e.toString());
+		}
+	}
+	static int getCoordinator(){
+		return lastCoordinator;
 	}
 }

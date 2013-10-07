@@ -16,15 +16,15 @@ public class Controller {
 		host_conf = new Config("/home/nazneen/workspace/threepc/config.properties");
 		final NetController host_nc = new NetController(host_conf);
 		Runtime.getRuntime().addShutdownHook(new Thread() {
-		    public void run() {
-		    	for(int i=1;i<host_conf.numProcesses;i++)
+			public void run() {
+				for(int i=1;i<host_conf.numProcesses;i++)
 					host_nc.sendMsg(i, "SHUTDOWN");
-		    	for(Process p: listParticipant)
-		    		p.destroy();
-		    	host_nc.shutdown();
-		    	host_conf.logger.info("shutting down");
-		    	}
-		 });
+				for(Process p: listParticipant)
+					p.destroy();
+				host_nc.shutdown();
+				host_conf.logger.info("shutting down");
+			}
+		});
 		host_conf.procNum = 0;
 		int participants = host_conf.numProcesses;
 		List<List<String>> recvdMsg;
@@ -40,7 +40,7 @@ public class Controller {
 		    }*/
 			listParticipant.add(i-1,p);
 		}
-		
+
 		Thread.sleep(1000);
 		//TODO wait for processes to stasrt
 		int c= findCoordinator();
@@ -50,12 +50,11 @@ public class Controller {
 		String s2 = "a.song";
 		host_nc.sendMsg(c, "INVOKE_3PC##"+command+"##"+s1+"##"+s2);
 		while(true){
-			recvdMsg = host_nc.getReceivedMsgs();		
+			recvdMsg = host_nc.getReceivedMsgs();
+			//System.out.println(recvdMsg);
 			if(!recvdMsg.isEmpty())
 				break;
 		}
-		//System.out.println("Outside break");
-		//System.out.println(recvdMsg.get(0));
 		if(recvdMsg.get(0).get(1).equals("COMMIT")){
 			host_conf.logger.info("Committed");
 		}
@@ -68,11 +67,11 @@ public class Controller {
 		for(Participant p:listParticipant){
 			p.shutdown();
 		}
-		*/	
+		 */	
 		host_conf.logger.info("Shutting down");
 		System.exit(0);
 	}
-	
+
 	private static void deleteDTLog(){
 		for(int i = 1; i < host_conf.numProcesses;i++){
 			File file = new File("/home/nazneen/logs/participant_"+i+".DTlog");

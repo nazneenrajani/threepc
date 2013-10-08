@@ -58,6 +58,8 @@ public class NetController {
 	 * @return bool indicating success
 	 */
 	public synchronized boolean sendMsg(int process, String msg) {
+		String origmsg=msg;
+		msg = msg+"@@"+config.procNum;
 		try {
 			if (outSockets[process] == null)
 				initOutgoingConn(process);
@@ -80,6 +82,7 @@ public class NetController {
                         config.procNum, process), e);
                     return false;
 				}
+				config.logger.info("Sent message "+msg+" to "+process);
 				return true;
 			}
 			config.logger.info(String.format("Server %d: Msg to %d failed.", 
@@ -88,6 +91,8 @@ public class NetController {
 				config.procNum, process), e);
 			return false;
 		}
+		
+		config.logger.info("Sent message "+origmsg+" to "+process);
 		return true;
 	}
 	
@@ -95,7 +100,8 @@ public class NetController {
 	 * Return a list of msgs received on established incoming sockets
 	 * @return list of messages sorted by socket, in FIFO order. *not sorted by time received*
 	 */
-	public synchronized List<String> getReceivedMsgs() {
+
+	public synchronized List<List<String>> getReceivedMsgs() {
 		List<String> objs = new ArrayList<String>();
 		synchronized(inSockets) {
 			ListIterator<IncomingSock> iter  = inSockets.listIterator();
@@ -111,8 +117,18 @@ public class NetController {
 				}
 			}
 		}
-		
-		return objs;
+		List<List<String>> retobjs = new ArrayList<List<String>>();
+		for(String s:objs){
+			String[] temp = s.split("@@");
+			String sender = temp[1];
+			String msg = temp[0];
+			List<String> tmp = new ArrayList<String>();
+			tmp.add(sender);
+			tmp.add(msg);
+			config.logger.info("Received "+tmp.get(1)+" from "+tmp.get(0));
+			retobjs.add(tmp);
+		}
+		return retobjs;
 	}
 	/**
 	 * Shuts down threads and sockets.

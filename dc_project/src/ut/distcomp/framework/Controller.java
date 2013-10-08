@@ -62,12 +62,6 @@ public class Controller {
 			host_conf.logger.info("Command Aborted");
 		}
 		//deleteDTLog();
-		//listParticipant.get(c).invokeThreePC(1, "a", "http://a.song");
-		/*
-		for(Participant p:listParticipant){
-			p.shutdown();
-		}
-		 */	
 		host_conf.logger.info("Shutting down");
 		System.exit(0);
 	}

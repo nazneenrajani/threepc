@@ -1,12 +1,9 @@
 package ut.distcomp.framework;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 public class Controller {
@@ -28,7 +25,7 @@ public class Controller {
 		host_conf.procNum = 0;
 		int participants = host_conf.numProcesses;
 		List<List<String>> recvdMsg;
-		deleteDTLog();
+		//deleteDTLog();
 		listParticipant= new ArrayList<Process>();	
 		for(int i = 1; i <participants; i++){
 			Process p = Runtime.getRuntime().exec("java -cp /home/nazneen/workspace/threepc/dc_project/bin/ ut.distcomp.framework.Participant "+i);
@@ -50,6 +47,18 @@ public class Controller {
 		String s2 = "a.song";
 		host_nc.sendMsg(c, "INVOKE_3PC##"+command+"##"+s1+"##"+s2);
 		while(true){
+			for(Process p:listParticipant){
+				try{
+					p.exitValue();
+					//System.out.println(listParticipant.indexOf(p)+1 + " Dead");
+					//p.
+					//TODO restart p
+				}catch(IllegalThreadStateException e){
+					//System.out.println(listParticipant.indexOf(p)+1+" Still running");
+					continue;
+				}
+			}
+			
 			recvdMsg = host_nc.getReceivedMsgs();
 			//System.out.println(recvdMsg);
 			if(!recvdMsg.isEmpty())

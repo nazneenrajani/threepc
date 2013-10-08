@@ -1,7 +1,6 @@
 package ut.distcomp.framework;
 
 import java.util.Hashtable;
-import java.util.logging.Logger;
 
 public class PlayList {
 	public static Hashtable<String, String> playlist = new Hashtable<String, String>();

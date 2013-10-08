@@ -4,15 +4,15 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
-import java.util.logging.Handler;
 import java.util.logging.SimpleFormatter;
 
 public class Participant {
@@ -31,12 +31,14 @@ public class Participant {
 	static String myState;
 	static String myVote;
 
-	public static void main(String[] args) throws FileNotFoundException, IOException{ 
+	public static void main(String[] args) throws FileNotFoundException, IOException{
+		System.setErr(new PrintStream(new FileOutputStream("/home/nazneen/logs/participant_"+id+".err")));
 		bufferedMessages = new ArrayList<List<String>>();
 		id=Integer.parseInt(args[0]);
 		lastCoordinator = 1;
 		myVote = "";
 		conf = new Config("/home/nazneen/workspace/threepc/config.properties");
+		conf.procNum=id;
 		//conf.logger.info("Process "+id+" started");
 		UP = new Integer[conf.numProcesses];
 		Boolean isRecoveryMode = false;
@@ -53,7 +55,7 @@ public class Participant {
 			fh = new FileHandler("/home/nazneen/logs/participant_"+id+".log",false);
 		else{
 			fh = new FileHandler("/home/nazneen/logs/participant_"+id+".log",true);
-			DTLogWrite("Recovered from crash");
+			//DTLogWrite("RECOVERY");
 		}
 		//Handler ch = new ConsoleHandler();
 		//conf.logger.addHandler(ch);
@@ -61,13 +63,13 @@ public class Participant {
 		SimpleFormatter formatter = new SimpleFormatter();  
 		fh.setFormatter(formatter); 
 		log("Process "+id + " initialized"); 
-		conf.procNum=id;
 		nc = new NetController(conf);
 		for(int j = 0;j<UP.length;j++)
 			UP[j]=1;
 		log("Started");
 		DTLogWrite("START");
 		myState = "UNCERTAIN";
+		//isRecoveryMode=true;
 		if(!isRecoveryMode){
 			Boolean shutdownFlag=true;
 			while(shutdownFlag){
@@ -112,42 +114,51 @@ public class Participant {
 			}
 		}
 		else{
-			//myState = "FAILED";
 			myState="";
 			String[] s =  returnLastLog();
 			String lastState = s[0];
 			lastCoordinator = Integer.parseInt(s[1]);
+			String[] upString = s[2].split(",");
+			for(int k = 0; k < conf.numProcesses;k++)
+				UP[k] = Integer.parseInt(upString[k]);
 			switch(lastState){
 			case "START":
+				myState = "ABORTED";
 				DTLogWrite("ABORT");
 				log("ABORT after recovery");
-				abort();
+				//abort();
 				break;
 			case "VOTE_REQ":
+				myState = "ABORTED";
 				DTLogWrite("ABORT");
 				log("ABORT after recovery");
-				abort();
+				//abort();
 				break;
 			case "YES":
+				myState = "UNCERTAIN";
 				log("Running termination protocol as participant");
-				participantRecovery();
+				//participantRecovery();
 				break;
 			case "NO":
+				myState = "ABORTED";
 				DTLogWrite("ABORT");
 				log("ABORT after recovery");
-				abort();
+				//abort();
 				break;
 			case "PRECOMMIT":
+				myState = "COMMITABLE";
 				log("Running termination protocol as participant");
-				participantRecovery(); 
+				//participantRecovery(); 
 				break;
 			case "COMMIT":
+				myState = "COMMITTED";
 				log("I had committed before crash");
-				commit();
+				//commit();
 				break;
 			case "ABORT":
+				myState = "ABORTED";
 				log("I had aborted before crash");
-				abort();
+				//abort();
 				break;
 			case "INVOKE_3PC":
 				break;
@@ -155,29 +166,86 @@ public class Participant {
 				conf.logger.severe("Bad state in DTLog");
 				break;
 			}
+			participantRecovery();
 		}
 	}
 
 	private static void participantRecovery() {
-		broadcast("FINALDECISION_REQ");
-		//broadcast(myState);
-
-		//TODO total failure
+		if(myState.equals("UNCERTAIN") || myState.equals("COMMITABLE"))
+			broadcast("FINALDECISION_REQ");
+		List<List<String>> recvMsg;
+		Integer[] zombie = new Integer[conf.numProcesses];
+		Integer[] lastRunningProcesses = new Integer[conf.numProcesses];
+		for(int k=0;k<zombie.length;k++)
+			zombie[k]=0;
+		for(int k=0;k<lastRunningProcesses.length;k++)
+			lastRunningProcesses[k]=UP[k];
+		String upString = UP[0].toString();
+		for(int i=1; i< UP.length;i++)
+			upString=upString+","+UP[i];
+		upString = "UP##"+upString;
+		broadcast(upString);
+		Boolean sendUPString = false;
+		Boolean totalFailureDetected = false;
+		Boolean finalDecisionReceived = false;
 		while(true){
-			//TODO because non blocking no timeouts?
-			List<List<String>> recMsg = nc.getReceivedMsgs();
-			if(!recMsg.isEmpty()){
-				String decision = recMsg.get(0).get(1);
-				if(decision.equals("COMMIT")){
-					DTLogWrite("COMMIT");
-					commit();
-				}	
-				else{
-					DTLogWrite("ABORT");
-					abort();
+			recvMsg= nc.getReceivedMsgs();
+			if(!recvMsg.isEmpty()){
+				for(List<String> s : recvMsg){
+					String[] s1;
+					if(s.get(1).startsWith("UP##")){
+						s1 = s.get(1).split("##");
+						log(Arrays.toString(s1));
+						zombie[Integer.parseInt(s.get(0))] = 1;
+						String[] t = s1[1].split(",");
+						for(int i = 0;i<conf.numProcesses;i++){
+							if(Integer.parseInt(t[i])==0) 
+								lastRunningProcesses[i] = 0;
+						}
+						sendUPString = true;
+						Boolean isSubset = true;
+						for(int i=0;i<conf.numProcesses;i++){
+							if(zombie[i]==1)
+								if(lastRunningProcesses[i]!=1)
+									isSubset = false;
+						}
+						if(isSubset)
+							totalFailureDetected = true;
+					}else if(s.get(1).equals("COMMIT")){
+						DTLogWrite("COMMIT");
+						commit();
+						finalDecisionReceived = true;
+					}else if(s.get(1).equals("ABORT")){
+						DTLogWrite("ABORT");
+						abort();
+						finalDecisionReceived = true;
+					}
+					else if(s.get(1).equals("FINALDECISION_REQ")){
+						if(myState.equals("COMMITTED"))
+							nc.sendMsg(Integer.parseInt(s.get(0)), "COMMIT");
+						else if (myState.equals("ABORTED"))
+							nc.sendMsg(Integer.parseInt(s.get(0)), "ABORT");
+					}
 				}
-				break;
 			}
+			if(sendUPString)
+				broadcast(upString);
+			if(totalFailureDetected || finalDecisionReceived)
+				break;
+		}
+
+		if(totalFailureDetected){
+			for(int i =0;i<UP.length;i++)
+				UP[i] = zombie[i];
+			electionProtocol();
+		}
+		else{
+			if(myState.equals("COMMITTED"))
+				commit();
+			else if(myState.equals("ABORTED"))
+				abort();
+			else
+				conf.logger.severe("Invalid state at end of participant recovery");
 		}
 	}
 
@@ -192,15 +260,17 @@ public class Participant {
 	}
 
 	private static String[] returnLastLog() {	 
-		String sCurrentLine = ""; 
+		ArrayList<String> lines = new ArrayList<String>();
 		try {
-			while ((sCurrentLine = dtlogReader.readLine()) != null) {
-				;
+			while (dtlogReader.ready())
+			{
+				lines.add(dtlogReader.readLine());
 			}
+
 		} catch (IOException e) {
 			e.printStackTrace();
-		}		
-		return sCurrentLine.split("\t");
+		}	
+		return lines.get(lines.size()-1).split("\t");
 	}
 
 	private static void waitForDecision() {
@@ -358,10 +428,8 @@ public class Participant {
 			}
 		}
 	}
-	
+
 	private static void sendFinalDecision(boolean isAbort) {
-		//TODO exception here
-		log("In sendFD");
 		bufferedMessages.addAll(nc.getReceivedMsgs());// TODO some people may still not have got final decision
 		if(!bufferedMessages.isEmpty()){
 			for(int k = 0; k < bufferedMessages.size();k++){
@@ -462,7 +530,7 @@ public class Participant {
 				break;
 			}
 			else if(UP[j]==1){
-				//nc.sendMsg(j, "UR_ELECTED");
+				nc.sendMsg(j, "UR_ELECTED");
 				lastCoordinator = j;
 				participantElectionProtocol();
 				break;
@@ -482,11 +550,21 @@ public class Participant {
 			List<List<String>> recMsg = nc.getReceivedMsgs();
 			for(List<String> s : recMsg){
 				if(s.get(1).equals("STATE_REQ")){
+					for(int i = 1; i<=Integer.parseInt(s.get(0));i++)
+						UP[i] = 0;
+						electionProtocol();
+					break; //TODO maybe return
+				}
+				else if(s.get(1).equals("UR_ELECTED")){
+					for(int i = 1; i<conf.procNum;i++)
+						UP[i] = 0;
+						electionProtocol();
 					break;
 				}
 				else{
 					bufferedMessages.add(s);
 					log("Unexpected response received "+s);
+					//TODO return maybe
 				}
 			}
 		}

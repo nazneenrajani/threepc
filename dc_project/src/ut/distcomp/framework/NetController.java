@@ -82,7 +82,7 @@ public class NetController {
                         config.procNum, process), e);
                     return false;
 				}
-				config.logger.info("Sent message "+msg+" to "+process);
+				config.logger.info("Sent message "+origmsg+" to "+process);
 				return true;
 			}
 			config.logger.info(String.format("Server %d: Msg to %d failed.", 

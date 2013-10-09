@@ -36,9 +36,12 @@ public class Participant {
 	/*static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
 	static String binPath = "/home/nazneen/workspace/threepc/dc_project/bin/";
 	static String logPath = "/home/nazneen/logs/";*/
-	static String confPath = "C:/Users/Harsh/Documents/GitHub/threepc/config.properties"; //TODO read these from config file
+	/*static String confPath = "C:/Users/Harsh/Documents/GitHub/threepc/config.properties"; //TODO read these from config file
 	static String binPath = "C:/Users/Harsh/Documents/GitHub/threepc/dc_project/bin/";
-	static String logPath = "C:/Users/Harsh/Desktop/logs/";
+	static String logPath = "C:/Users/Harsh/Desktop/logs/";*/
+	static String confPath = "/home/harshp/code/threepc/config.properties"; //TODO read these from config file
+	static String binPath = "/home/harshp/code/threepc/dc_project/bin/";
+	static String logPath = "/home/harshp/logs/";
 	static long delay = 10;
 
 	public static void main(String[] args) throws FileNotFoundException, IOException, InterruptedException{

@@ -29,30 +29,31 @@ public class Participant {
 	static List<List<String>> bufferedMessages;
 	static Integer[] UP;
 	static String myState;
-	static String myVote;
+	static String myVoteStr;
 	static String finalDecision;
-	
+
 	static String failurePoint;
-	/*static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
+	static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
 	static String binPath = "/home/nazneen/workspace/threepc/dc_project/bin/";
-	static String logPath = "/home/nazneen/logs/";*/
+	static String logPath = "/home/nazneen/logs/";
 	/*static String confPath = "C:/Users/Harsh/Documents/GitHub/threepc/config.properties"; //TODO read these from config file
 	static String binPath = "C:/Users/Harsh/Documents/GitHub/threepc/dc_project/bin/";
 	static String logPath = "C:/Users/Harsh/Desktop/logs/";*/
-	static String confPath = "/home/harshp/code/threepc/config.properties"; //TODO read these from config file
-	static String binPath = "/home/harshp/code/threepc/dc_project/bin/";
-	static String logPath = "/home/harshp/logs/";
+	//	static String confPath = "/home/harshp/code/threepc/config.properties"; //TODO read these from config file
+	//	static String binPath = "/home/harshp/code/threepc/dc_project/bin/";
+	//	static String logPath = "/home/harshp/logs/";
 	static long delay = 10;
 
 	public static void main(String[] args) throws FileNotFoundException, IOException, InterruptedException{
 		bufferedMessages = new ArrayList<List<String>>();
 		id=Integer.parseInt(args[0]);
+		System.setErr(new PrintStream(new FileOutputStream(logPath +"participant_"+id+".err")));
 		if(args.length>1)
 			failurePoint = args[1];
 		else
 			failurePoint="";
 		lastCoordinator = 1;
-		myVote = "";
+		myVoteStr = "NOT_VOTED";
 		finalDecision="";
 		conf = new Config(confPath);
 		conf.procNum=id;
@@ -72,7 +73,6 @@ public class Participant {
 		dtlog = new BufferedWriter(fw);
 		dtlogReader = new BufferedReader(new FileReader(file));
 		// This block configure the logger with handler and formatter
-		System.setErr(new PrintStream(new FileOutputStream(logPath +"participant_"+id+".err")));
 		if(!isRecoveryMode)
 			fh = new FileHandler(logPath+"participant_"+id+".log", false);
 		else{
@@ -137,6 +137,7 @@ public class Participant {
 			String lastState = s[0];
 			lastCoordinator = Integer.parseInt(s[1]);
 			String[] upString = s[2].split(",");
+			myVoteStr = s[3];
 			for(int k = 0; k < conf.numProcesses;k++)
 				UP[k] = Integer.parseInt(upString[k]);
 			switch(lastState){
@@ -228,13 +229,15 @@ public class Participant {
 					if(s.get(1).startsWith("UP##")){
 						s1 = s.get(1).split("##");
 						log(Arrays.toString(s1));
+						sendUPString = false;
+						if(zombie[Integer.parseInt(s.get(0))]==0) 
+							sendUPString = true;
 						zombie[Integer.parseInt(s.get(0))] = 1;
 						String[] receivedUP = s1[1].split(",");
 						for(int i = 1;i<conf.numProcesses;i++){
 							if(Integer.parseInt(receivedUP[i])==0) 
 								lastRunningProcesses[i] = 0;
 						}
-						sendUPString = false;
 						for(int j = 0;j< lastRunningProcesses.length;j++){
 							if(lastRunningProcesses[j]!=Integer.parseInt(receivedUP[j]))
 								sendUPString = true;
@@ -267,6 +270,19 @@ public class Participant {
 							nc.sendMsg(Integer.parseInt(s.get(0)), "COMMIT");
 						else if (myState.equals("ABORTED"))
 							nc.sendMsg(Integer.parseInt(s.get(0)), "ABORT");
+					}
+					else if(s.get(1).equals("UR_ELECTED")){
+						if(myState.equals("COMMITTED"))
+							broadcast("COMMIT");
+						else if (myState.equals("ABORTED"))
+							broadcast("ABORT");
+						else{
+							lastCoordinator = conf.procNum;
+							log(s.get(0)+" elected me coordinator after recovery");
+							for(int i =0;i<UP.length;i++)
+								UP[i] = zombie[i];
+							coordinatorElectionProtocol();
+						}
 					}
 				}
 			}
@@ -338,7 +354,7 @@ public class Participant {
 		long start = System.currentTimeMillis();
 		while(true){
 			Thread.sleep(delay);
-			if(System.currentTimeMillis()-start > timeOut){
+			if(System.currentTimeMillis()-start > 2*timeOut){
 				log("Timed out on Coordinator waiting for Decision. Running election protocol");
 				UP[getCoordinator()]=0;
 				electionProtocol();
@@ -363,7 +379,8 @@ public class Participant {
 						long start1 = System.currentTimeMillis();
 						while(true){
 							Thread.sleep(delay);
-							if(System.currentTimeMillis()-start1 > timeOut){
+							if(System.currentTimeMillis()-start1 > 2*timeOut){
+								log(bufferedMessages+"");
 								log("Timed out on Coordinator after sending ACK. Running election protocol");
 								UP[getCoordinator()]=0;
 								log(Arrays.toString(UP));
@@ -378,7 +395,8 @@ public class Participant {
 										log("Committing");
 										myState = "COMMITTED";
 										return;
-									}else
+									}
+									else
 										bufferedMessages.add(msg1);
 								}
 							}
@@ -403,16 +421,16 @@ public class Participant {
 		}
 		Boolean vote = true;
 		if(conf.procNum==-1){
+			myVoteStr = "NO";
 			DTLogWrite("NO");
 			vote = false;
 			nc.sendMsg(getCoordinator(), "NO");
-			myVote = "NO";
 		}
 		else{
 			log("Writing yes to file");
+			myVoteStr = "YES";
 			DTLogWrite("YES");
 			nc.sendMsg(getCoordinator(), "YES");
-			myVote = "YES";
 		}
 		return vote;
 	}
@@ -439,12 +457,13 @@ public class Participant {
 		log("Sending VOTE_REQ");
 		broadcast("VOTE_REQ##"+message+"##"+s1+"##"+s2);
 		DTLogWrite("START_3PC");
-		DTLogWrite("YES");
+		myVoteStr = "YES"; 
+		DTLogWrite("YES"); // TODO let coordinator 
 		// Collect votes
 		List<String> exp = new ArrayList<String>();
 		exp.add("YES");
 		exp.add("NO");
-		String[] votes=collectResults(exp,"YES");	
+		String[] votes=collectResults(exp,myVoteStr);	
 		boolean isAbort = false;
 		// Decide "PC" or Abort
 		log(Arrays.toString(votes));
@@ -495,7 +514,7 @@ public class Participant {
 		failHere("COORDINATOR_PARTIAL_COMMIT");
 		Boolean[] invrecipients = new Boolean[conf.numProcesses];
 		for(int i=0;i<conf.numProcesses;i++)
-				invrecipients[i]=!recipients[i];
+			invrecipients[i]=!recipients[i];
 		multicast("COMMIT", invrecipients);
 		//broadcast("COMMIT");
 		// Send "Commit"
@@ -612,6 +631,7 @@ public class Participant {
 			dtlog.write(msg+"\t"+getCoordinator()+"\t");
 			for(int i=0;i<conf.numProcesses;i++)
 				dtlog.write(UP[i]+",");
+			dtlog.write("\t"+myVoteStr);
 			dtlog.write("\n");
 			dtlog.flush();
 		} catch (IOException e) {
@@ -663,7 +683,6 @@ public class Participant {
 							UP[i] = 0;
 						//electionProtocol();
 						lastCoordinator= Integer.parseInt(s.get(0));
-						//return; //TODO continue, and then return
 					}
 					waitingforStateReq=false;
 				}
@@ -674,6 +693,20 @@ public class Participant {
 					lastCoordinator = conf.procNum;
 					waitingforStateReq=false;
 				}
+				else if(s.get(1).equals("COMMIT")){
+					log("I am commiting after total failure maybe");
+					myState = "COMMITTED";
+					DTLogWrite("COMMIT");
+					commit();
+					waitingforStateReq=false;
+				}
+				else if(s.get(1).equals("ABORT")){
+					log("I am aborting after total failure maybe");
+					myState = "ABORTED";
+					DTLogWrite("ABORT");
+					abort();
+					waitingforStateReq=false;
+				}
 				else{
 					bufferedMessages.add(s);
 					log("Unexpected response received "+s);
@@ -681,7 +714,7 @@ public class Participant {
 			}
 		}
 
-		if(myVote.equals("") || myVote.equals("NO") || returnLastLog()[0].equals("ABORT"))
+		if(myVoteStr.equals("NOT_VOTED") || myVoteStr.equals("NO") || returnLastLog()[0].equals("ABORT"))
 			myState = "ABORTED";
 		else if(returnLastLog()[0].equals("COMMIT"))
 			myState = "COMMITTED";
@@ -725,7 +758,7 @@ public class Participant {
 						long start1 = System.currentTimeMillis();
 						while(true){
 							Thread.sleep(delay);
-							if(System.currentTimeMillis()-start1 > timeOut){
+							if(System.currentTimeMillis()-start1 > 2*timeOut){
 								log("Timed out on "+getCoordinator()+" while waiting for COMMIT");
 								UP[getCoordinator()]=0;
 								electionProtocol();
@@ -822,9 +855,9 @@ public class Participant {
 				DTLogWrite("COMMIT");
 				myState="COMMITTED";
 				//while(true){
-					broadcast("COMMIT");
-			//		if(0==1) break;
-			//	}
+				broadcast("COMMIT");
+				//		if(0==1) break;
+				//	}
 			}
 		}
 		sendFinalDecision(isAbort);

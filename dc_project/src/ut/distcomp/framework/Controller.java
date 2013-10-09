@@ -11,15 +11,15 @@ public class Controller {
 	static Config host_conf = null;
 	static NetController host_nc;
 	static int currentCoordinator = 1;
-	/*static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
+	static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
 	static String binPath = "/home/nazneen/workspace/threepc/dc_project/bin/";
-	static String logPath = "/home/nazneen/logs/";*/
+	static String logPath = "/home/nazneen/logs/";
 	/*static String confPath = "C:/Users/Harsh/Documents/GitHub/threepc/config.properties"; //TODO read these from config file
 	static String binPath = "C:/Users/Harsh/Documents/GitHub/threepc/dc_project/bin/";
 	static String logPath = "C:/Users/Harsh/Desktop/logs/";*/
-	static String confPath = "/home/harshp/code/threepc/config.properties"; //TODO read these from config file
-	static String binPath = "/home/harshp/code/threepc/dc_project/bin/";
-	static String logPath = "/home/harshp/logs/";
+//	static String confPath = "/home/harshp/code/threepc/config.properties"; //TODO read these from config file
+//	static String binPath = "/home/harshp/code/threepc/dc_project/bin/";
+//	static String logPath = "/home/harshp/logs/";
 	static long delay = 10;
 	
 	public static void main(String[] args) throws FileNotFoundException, IOException, InterruptedException{
@@ -35,9 +35,9 @@ public class Controller {
 		});
 		host_conf.procNum = 0;
 
-		noFailuresTest();
+		//noFailuresTest();
 
-		//participantFailure();
+		//participantFailure(); // Participant is not able to use port again on coming back. Need to exit gracefully
 
 		//cascadingCoordinatorFailure(); // some process sends STATE_REQ to another, but other puts it in buffer and forgets about it. Then thinks the first is dead
 
@@ -54,9 +54,72 @@ public class Controller {
 		System.exit(0);
 	}
 
-	private static void totalFailure() {
-		// TODO Auto-generated method stub
+	private static void totalFailure() throws IOException, InterruptedException {
+		int participants = host_conf.numProcesses;
+		List<List<String>> recvdMsg;
 
+		deleteDTLog();
+		listParticipant= new ArrayList<Process>();	
+		for(int i = 1; i <participants; i++){
+			Process p = null;
+			if(i==1)
+				p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant "+ i + " COORDINATOR_AFTER_PRECOMMIT");
+			else
+				p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant "+ i + " AFTER_VOTE");
+
+			listParticipant.add(i-1,p);
+		}
+		Thread.sleep(1000);
+		//TODO wait for processes to stasrt
+		int c= findCoordinator();
+		//Iterator it = recvdMsg.iterator();
+		String command = "add";
+		String s1 = "a";
+		String s2 = "a.song";
+		host_nc.sendMsg(c, "INVOKE_3PC##"+command+"##"+s1+"##"+s2);
+		Long start = System.currentTimeMillis();
+		Boolean receivedResponse = false;
+		while(true){
+			Thread.sleep(delay);
+			//System.out.println("In loop");
+			for(Process p:listParticipant){
+				try{
+					System.out.println(p.exitValue());
+					System.out.println((listParticipant.indexOf(p)+1) + " Dead");
+					int index = listParticipant.indexOf(p);
+					host_conf.logger.info("Starting Process "+(listParticipant.indexOf(p)+1)+" Again");
+					p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + (listParticipant.indexOf(p)+1));
+					listParticipant.set(index, p);
+					//TODO restart p
+				}catch(IllegalThreadStateException e){
+					//System.out.println(listParticipant.indexOf(p)+1+" Still running");
+					continue;
+				}
+			}
+			//Thread.sleep(1000);
+			recvdMsg = host_nc.getReceivedMsgs();
+			//System.out.println(recvdMsg);
+			if(!recvdMsg.isEmpty())
+			{
+				for(List<String> s: recvdMsg){
+				if(s.get(1).equals("COMMIT")){
+					host_conf.logger.info("Committed");
+					receivedResponse = true;
+				}
+				else if(s.get(1).equals("ABORT")){
+					host_conf.logger.info("Command Aborted");
+				/* }else if(s.get(1).equals("FAILING")){
+					if(s.get(0).equals("1"))
+						currentCoordinator = 2;
+					host_conf.logger.info("Starting Process "+s.get(0)+" Again");
+					Process p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + s.get(0));
+					listParticipant.set(Integer.parseInt(s.get(0))-1, p); */
+				} 
+				}
+				if(receivedResponse|| System.currentTimeMillis() - start > 10000L)
+					break;
+			}		
+		}
 	}
 
 	private static void partialCommitFailure() throws IOException, InterruptedException {

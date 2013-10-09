@@ -16,7 +16,7 @@ import java.util.logging.FileHandler;
 import java.util.logging.SimpleFormatter;
 
 public class Participant {
-	final static long timeOut = 2000L;
+	final static long timeOut = 5000L;
 	static int id;
 	static int lastCoordinator;
 	static PlayList playList;
@@ -30,11 +30,16 @@ public class Participant {
 	static Integer[] UP;
 	static String myState;
 	static String myVote;
+	static String failurePoint;
 
 	public static void main(String[] args) throws FileNotFoundException, IOException{
-		System.setErr(new PrintStream(new FileOutputStream("/home/nazneen/logs/participant_"+id+".err")));
 		bufferedMessages = new ArrayList<List<String>>();
 		id=Integer.parseInt(args[0]);
+		System.setErr(new PrintStream(new FileOutputStream("/home/nazneen/logs/participant_"+id+".err")));
+		if(args.length>1)
+			failurePoint = args[1];
+		else
+			failurePoint="";
 		lastCoordinator = 1;
 		myVote = "";
 		conf = new Config("/home/nazneen/workspace/threepc/config.properties");
@@ -43,11 +48,15 @@ public class Participant {
 		UP = new Integer[conf.numProcesses];
 		Boolean isRecoveryMode = false;
 		File file = new File("/home/nazneen/logs/participant_"+id+".DTlog");
-		if (!file.exists()) 
+		FileWriter fw;
+		if (!file.exists()){ 
 			file.createNewFile();
-		else
+			fw = new FileWriter(file.getAbsoluteFile());
+		}
+		else{
 			isRecoveryMode = true;
-		FileWriter fw = new FileWriter(file.getAbsoluteFile());
+		 	fw = new FileWriter(file.getAbsoluteFile(),true);
+		}
 		dtlog = new BufferedWriter(fw);
 		dtlogReader = new BufferedReader(new FileReader(file));
 		// This block configure the logger with handler and formatter
@@ -66,11 +75,11 @@ public class Participant {
 		nc = new NetController(conf);
 		for(int j = 0;j<UP.length;j++)
 			UP[j]=1;
-		log("Started");
-		DTLogWrite("START");
 		myState = "UNCERTAIN";
 		//isRecoveryMode=true;
 		if(!isRecoveryMode){
+			log("Started");
+			DTLogWrite("START");
 			Boolean shutdownFlag=true;
 			while(shutdownFlag){
 				participant_recvdMsg = nc.getReceivedMsgs();
@@ -92,6 +101,7 @@ public class Participant {
 							DTLogWrite("VOTE_REQ");
 							log("Received VOTE_REQ");
 							Boolean myVote = castVote(message[1],message[2],message[3]);
+							failHere("AFTER_VOTE");
 							if(!myVote){
 								myState = "ABORTED";
 								DTLogWrite("ABORT");
@@ -114,6 +124,7 @@ public class Participant {
 			}
 		}
 		else{
+			log("Entering Recovery mode");
 			myState="";
 			String[] s =  returnLastLog();
 			String lastState = s[0];
@@ -170,7 +181,16 @@ public class Participant {
 		}
 	}
 
+	private static void failHere(String location) {
+		log("In Failing here;");
+		if(failurePoint.equals(location)){
+			log("Failed at "+location);
+			System.exit(1);
+		}
+	}
+
 	private static void participantRecovery() {
+		log(myState);
 		if(myState.equals("UNCERTAIN") || myState.equals("COMMITABLE"))
 			broadcast("FINALDECISION_REQ");
 		List<List<String>> recvMsg;
@@ -178,6 +198,7 @@ public class Participant {
 		Integer[] lastRunningProcesses = new Integer[conf.numProcesses];
 		for(int k=0;k<zombie.length;k++)
 			zombie[k]=0;
+		zombie[conf.procNum]=1;
 		for(int k=0;k<lastRunningProcesses.length;k++)
 			lastRunningProcesses[k]=UP[k];
 		String upString = UP[0].toString();
@@ -205,12 +226,16 @@ public class Participant {
 						sendUPString = true;
 						Boolean isSubset = true;
 						for(int i=0;i<conf.numProcesses;i++){
-							if(zombie[i]==1)
-								if(lastRunningProcesses[i]!=1)
+							if(lastRunningProcesses[i]==1)
+								if(zombie[i]!=1)
 									isSubset = false;
 						}
-						if(isSubset)
+						if(isSubset){
+							log("Total failure detected");
+							log(Arrays.toString(zombie));
+							log(Arrays.toString(lastRunningProcesses));
 							totalFailureDetected = true;
+						}
 					}else if(s.get(1).equals("COMMIT")){
 						DTLogWrite("COMMIT");
 						commit();
@@ -295,6 +320,7 @@ public class Participant {
 						DTLogWrite("PRECOMMIT");
 						log("Received PRECOMMIT");
 						myState = "COMMITABLE";
+						failHere("BEFORE_COMMIT");
 						nc.sendMsg(getCoordinator(), "ACK");
 						long start1 = System.currentTimeMillis();
 						while(true){
@@ -337,6 +363,7 @@ public class Participant {
 			myVote = "NO";
 		}
 		else{
+			log("Writing yes to file");
 			DTLogWrite("YES");
 			nc.sendMsg(getCoordinator(), "YES");
 			myVote = "YES";
@@ -430,16 +457,19 @@ public class Participant {
 	}
 
 	private static void sendFinalDecision(boolean isAbort) {
-		bufferedMessages.addAll(nc.getReceivedMsgs());// TODO some people may still not have got final decision
-		if(!bufferedMessages.isEmpty()){
-			for(int k = 0; k < bufferedMessages.size();k++){
-				List<String> s = bufferedMessages.get(k);
-				if(s.get(1).equals("FINALDECISION_REQ")){
-					if(isAbort)
-						nc.sendMsg(Integer.parseInt(s.get(0)),"ABORT");
-					else
-						nc.sendMsg(Integer.parseInt(s.get(0)),"COMMIT");
-					bufferedMessages.remove(bufferedMessages.indexOf(s));
+		Long start = System.currentTimeMillis();
+		while(System.currentTimeMillis() - start < timeOut){
+			bufferedMessages.addAll(nc.getReceivedMsgs());// TODO some people may still not have got final decision
+			if(!bufferedMessages.isEmpty()){
+				for(int k = 0; k < bufferedMessages.size();k++){
+					List<String> s = bufferedMessages.get(k);
+					if(s.get(1).equals("FINALDECISION_REQ")){
+						if(isAbort)
+							nc.sendMsg(Integer.parseInt(s.get(0)),"ABORT");
+						else
+							nc.sendMsg(Integer.parseInt(s.get(0)),"COMMIT");
+						bufferedMessages.remove(bufferedMessages.indexOf(s));
+					}
 				}
 			}
 		}
@@ -552,13 +582,13 @@ public class Participant {
 				if(s.get(1).equals("STATE_REQ")){
 					for(int i = 1; i<=Integer.parseInt(s.get(0));i++)
 						UP[i] = 0;
-						electionProtocol();
+					electionProtocol();
 					break; //TODO maybe return
 				}
 				else if(s.get(1).equals("UR_ELECTED")){
 					for(int i = 1; i<conf.procNum;i++)
 						UP[i] = 0;
-						electionProtocol();
+					electionProtocol();
 					break;
 				}
 				else{

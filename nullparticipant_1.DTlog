@@ -1,4 +1,0 @@
-START	1	1,1,1,1,1,1,1,	NOT_VOTED	NULL	NULL	NULL
-START_3PC	1	1,1,1,1,1,1,1,	NOT_VOTED	add	a	a.song
-YES	1	1,1,1,1,1,1,1,	YES	add	a	a.song
-ABORT	1	1,1,1,1,1,1,1,	YES	add	a	a.song

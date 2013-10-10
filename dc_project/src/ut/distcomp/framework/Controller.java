@@ -11,7 +11,7 @@ public class Controller {
 	static Config host_conf = null;
 	static NetController host_nc;
 	static int currentCoordinator = 1;
-	static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
+	static String confPath = "/home/nazneen/workspace/threepc/config.properties";
 	static String binPath;
 	static String logPath;
 	static long delay = 10;
@@ -30,26 +30,18 @@ public class Controller {
 		host_conf.procNum = 0;
 		binPath = host_conf.binPath;
 		logPath = host_conf.logPath;
-		//noFailuresTest();
-
-		//participantFailure(); // Participant is not able to use port again on coming back if we use messages. Need to exit gracefully
-
-		//cascadingCoordinatorFailure(); // some process sends STATE_REQ to another, but other puts it in buffer and forgets about it. Then thinks the first is dead
-
+		noFailuresTest();
+		//participantFailure(); 
+		//cascadingCoordinatorFailure();
 		//futureCoordinatorFailure();
-
 		//partialPrecommitFailure();
-
 		//precommitFailure();
-
-		//partialCommitFailure(); // Works okay except 2 is not expecting to be made coordinator. 3 updates its UP incorrectly
-
+		//partialCommitFailure();
+		//totalFailure();
 		//totalFailure2(); 
-
-		multipleFailure(); 
-
+		//multipleTotalFailure();
+		//multipleTotalFailure2();
 		//deathAfterFailure();
-
 		host_conf.logger.info("Shutting down");
 		System.exit(0);
 	}
@@ -78,9 +70,7 @@ public class Controller {
 			listParticipant.add(i-1,proc);
 		}
 		Thread.sleep(1000);
-		//TODO wait for processes to stasrt
 		int c= findCoordinator();
-		//Iterator it = recvdMsg.iterator();
 		String command = "add";
 		String s1 = "a";
 		String s2 = "a.song";
@@ -89,7 +79,6 @@ public class Controller {
 		Boolean receivedResponse = false;
 		while(true){
 			Thread.sleep(delay);
-			//System.out.println("In loop");					receivedResponse = true;
 			Process process = null;
 			for(Process proc:listParticipant){
 				try{
@@ -99,15 +88,11 @@ public class Controller {
 					host_conf.logger.info("Starting Process "+(listParticipant.indexOf(proc)+1)+" Again");
 					proc= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + (listParticipant.indexOf(proc)+1));
 					listParticipant.set(index, proc);
-					//TODO restart p
 				}catch(IllegalThreadStateException e){
-					//System.out.println(listParticipant.indexOf(p)+1+" Still running");
 					continue;
 				}
 			}
-			//Thread.sleep(1000);
 			recvdMsg = host_nc.getReceivedMsgs();
-			//System.out.println(recvdMsg);
 			if(!recvdMsg.isEmpty())
 			{
 				for(List<String> s: recvdMsg){
@@ -118,18 +103,10 @@ public class Controller {
 					else if(s.get(1).equals("ABORT")){
 						host_conf.logger.info("Command Aborted");
 						receivedResponse = true;
-						/* }else if(s.get(1).equals("FAILING")){
-					if(s.get(0).equals("1"))
-						currentCoordinator = 2;
-					host_conf.logger.info("Starting Process "+s.get(0)+" Again");
-					Process p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + s.get(0));
-					listParticipant.set(Integer.parseInt(s.get(0))-1, p); */
 					} 
 				}
 				if(receivedResponse)
 					break;
-				//if(System.currentTimeMillis() - start > 10000L)
-				//	break;
 			}		
 		}
 
@@ -143,7 +120,7 @@ public class Controller {
 		genericFailure(errorlocations);
 	}
 
-	private static void multipleFailure() throws IOException, InterruptedException{
+	private static void multipleTotalFailure() throws IOException, InterruptedException{
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		errorlocations[1]="COORDINATOR_AFTER_PRECOMMIT";
 		errorlocations[2]="AFTER_VOTE";
@@ -161,6 +138,25 @@ public class Controller {
 		multipleFailureGeneric(errorlocations, errorlocations2);	
 	}
 
+	private static void multipleTotalFailure2() throws IOException, InterruptedException{
+		String[] errorlocations =  new String[host_conf.numProcesses];
+		errorlocations[1]="COORDINATOR_AFTER_PRECOMMIT";
+		errorlocations[2]="START";
+		errorlocations[3]="VOTE_REQ";
+		errorlocations[4]="AFTER_VOTE";
+		for(int i=5;i<host_conf.numProcesses;i++)
+			errorlocations[i] = "AFTER_VOTE";
+		String[] errorlocations2 =  new String[host_conf.numProcesses];
+		errorlocations2[1]="COORDINATOR_PARTIAL_COMMIT";
+		errorlocations2[2]="RECOVERY_PARTICIPANT_FAIL_AFTER_PRECOMMIT";
+		errorlocations2[3]="RECOVERY_PARTICIPANT_FAIL_AFTER_STATE_REQ";
+		errorlocations2[4]="RECOVERY_PARTICIPANT_FAIL_AFTER_PRECOMMIT";
+		for(int i=5;i<host_conf.numProcesses;i++)
+			errorlocations2[i] = "AFTER_VOTE";
+		multipleFailureGeneric(errorlocations, errorlocations2);	
+	}
+
+	
 	private static void multipleFailureGeneric(String[] errorlocations,String[] errorlocations2) throws IOException, InterruptedException {
 		int participants = host_conf.numProcesses;
 		List<List<String>> recvdMsg;
@@ -173,9 +169,7 @@ public class Controller {
 			listParticipant.add(i-1,p);
 		}
 		Thread.sleep(1000);
-		//TODO wait for processes to stasrt
 		int c= findCoordinator();
-		//Iterator it = recvdMsg.iterator();
 		String command = "add";
 		String s1 = "a";
 		String s2 = "a.song";
@@ -187,8 +181,6 @@ public class Controller {
 			failedOnce[i] = false;
 		while(true){
 			Thread.sleep(delay);
-			//System.out.println("In loop");					receivedResponse = true;
-
 			for(Process p:listParticipant){
 				try{
 					System.out.println(p.exitValue());
@@ -202,15 +194,11 @@ public class Controller {
 						failedOnce[index+1] = true;
 					}
 					listParticipant.set(index, p);
-					//TODO restart p
 				}catch(IllegalThreadStateException e){
-					//System.out.println(listParticipant.indexOf(p)+1+" Still running");
 					continue;
 				}
 			}
-			//Thread.sleep(1000);
 			recvdMsg = host_nc.getReceivedMsgs();
-			//System.out.println(recvdMsg);
 			if(!recvdMsg.isEmpty())
 			{
 				for(List<String> s: recvdMsg){
@@ -221,18 +209,10 @@ public class Controller {
 					else if(s.get(1).equals("ABORT")){
 						host_conf.logger.info("Command Aborted");
 						receivedResponse = true;
-						/* }else if(s.get(1).equals("FAILING")){
-					if(s.get(0).equals("1"))
-						currentCoordinator = 2;
-					host_conf.logger.info("Starting Process "+s.get(0)+" Again");
-					Process p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + s.get(0));
-					listParticipant.set(Integer.parseInt(s.get(0))-1, p); */
 					} 
 				}
 				if(receivedResponse)
 					break;
-				//if(System.currentTimeMillis() - start > 10000L)
-				//	break;
 			}		
 		}
 	}
@@ -330,9 +310,7 @@ public class Controller {
 			listParticipant.add(i-1,p);
 		}
 		Thread.sleep(1000);
-		//TODO wait for processes to stasrt
 		int c= findCoordinator();
-		//Iterator it = recvdMsg.iterator();
 		String command = "add";
 		String s1 = "a";
 		String s2 = "a.song";
@@ -341,8 +319,6 @@ public class Controller {
 		Boolean receivedResponse = false;
 		while(true){
 			Thread.sleep(delay);
-			//System.out.println("In loop");					receivedResponse = true;
-
 			for(Process p:listParticipant){
 				try{
 					System.out.println(p.exitValue());
@@ -351,15 +327,11 @@ public class Controller {
 					host_conf.logger.info("Starting Process "+(listParticipant.indexOf(p)+1)+" Again");
 					p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + (listParticipant.indexOf(p)+1));
 					listParticipant.set(index, p);
-					//TODO restart p
 				}catch(IllegalThreadStateException e){
-					//System.out.println(listParticipant.indexOf(p)+1+" Still running");
 					continue;
 				}
 			}
-			//Thread.sleep(1000);
 			recvdMsg = host_nc.getReceivedMsgs();
-			//System.out.println(recvdMsg);
 			if(!recvdMsg.isEmpty())
 			{
 				for(List<String> s: recvdMsg){
@@ -370,18 +342,10 @@ public class Controller {
 					else if(s.get(1).equals("ABORT")){
 						host_conf.logger.info("Command Aborted");
 						receivedResponse = true;
-						/* }else if(s.get(1).equals("FAILING")){
-					if(s.get(0).equals("1"))
-						currentCoordinator = 2;
-					host_conf.logger.info("Starting Process "+s.get(0)+" Again");
-					Process p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + s.get(0));
-					listParticipant.set(Integer.parseInt(s.get(0))-1, p); */
 					} 
 				}
 				if(receivedResponse)
 					break;
-				//if(System.currentTimeMillis() - start > 10000L)
-				//	break;
 			}		
 		}
 	}

@@ -715,6 +715,7 @@ public class Participant {
 			dtlog.write("\t"+command+"\t"+param1+"\t"+param2);
 			dtlog.write("\n");
 			dtlog.flush();
+			failHere(msg);
 		} catch (IOException e) {
 			conf.logger.severe(e.toString());
 		}

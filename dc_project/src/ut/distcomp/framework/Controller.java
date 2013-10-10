@@ -47,7 +47,7 @@ public class Controller {
 
 		//partialCommitFailure(); // Works okay except 2 is not expecting to be made coordinator. 3 updates its UP incorrectly
 
-		totalFailure(); 
+		totalFailure2(); 
 		
 		//multipleFailure(); // TODO
 
@@ -55,6 +55,10 @@ public class Controller {
 		System.exit(0);
 	}
 	
+	private static void multipleFailure() throws IOException, InterruptedException {
+		;
+	}
+
 	private static void totalFailure() throws IOException, InterruptedException {
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		errorlocations[1]="COORDINATOR_AFTER_PRECOMMIT";
@@ -66,7 +70,10 @@ public class Controller {
 	private static void totalFailure2() throws IOException, InterruptedException {
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		errorlocations[1]="COORDINATOR_AFTER_PRECOMMIT";
-		for(int i=2;i<host_conf.numProcesses;i++)
+		errorlocations[2]="VOTE_REQ";
+		errorlocations[3]="START";
+		errorlocations[4]="NO";
+		for(int i=5;i<host_conf.numProcesses;i++)
 			errorlocations[i] = "AFTER_VOTE";
 		genericFailure(errorlocations);
 	}
@@ -156,7 +163,8 @@ public class Controller {
 		Boolean receivedResponse = false;
 		while(true){
 			Thread.sleep(delay);
-			//System.out.println("In loop");
+			//System.out.println("In loop");					receivedResponse = true;
+
 			for(Process p:listParticipant){
 				try{
 					System.out.println(p.exitValue());

@@ -47,14 +47,92 @@ public class Controller {
 
 		//partialCommitFailure(); // Works okay except 2 is not expecting to be made coordinator. 3 updates its UP incorrectly
 
-		totalFailure2(); 
+		//totalFailure2(); 
 		
 		//multipleFailure(); // TODO
-
+		int[] n = new int[host_conf.numProcesses];
+		int[] p = new int[host_conf.numProcesses];
+		for(int i=0;i<host_conf.numProcesses; i++){
+			n[i]=-1;
+			p[i]=-1;
+		}
+		n[5]=2;
+		p[5]=1;
+		deathAfter(n,p);
+		
 		host_conf.logger.info("Shutting down");
 		System.exit(0);
 	}
 	
+	private static void deathAfter(int[] n, int[] p) throws InterruptedException, IOException {
+		int participants = host_conf.numProcesses;
+		List<List<String>> recvdMsg;
+
+		deleteDTLog();
+		listParticipant= new ArrayList<Process>();	
+		for(int i = 1; i <participants; i++){
+			Process proc = null;
+			proc= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant "+ i + " NOFAIL "+n[i]+" "+p[i]);
+			listParticipant.add(i-1,proc);
+		}
+		Thread.sleep(1000);
+		//TODO wait for processes to stasrt
+		int c= findCoordinator();
+		//Iterator it = recvdMsg.iterator();
+		String command = "add";
+		String s1 = "a";
+		String s2 = "a.song";
+		host_nc.sendMsg(c, "INVOKE_3PC##"+command+"##"+s1+"##"+s2);
+		Long start = System.currentTimeMillis();
+		Boolean receivedResponse = false;
+		while(true){
+			Thread.sleep(delay);
+			//System.out.println("In loop");					receivedResponse = true;
+			Process process = null;
+			for(Process proc:listParticipant){
+				try{
+					System.out.println(proc.exitValue());
+					System.out.println((listParticipant.indexOf(proc)+1) + " Dead");
+					int index = listParticipant.indexOf(proc);
+					host_conf.logger.info("Starting Process "+(listParticipant.indexOf(proc)+1)+" Again");
+					proc= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + (listParticipant.indexOf(proc)+1));
+					listParticipant.set(index, proc);
+					//TODO restart p
+				}catch(IllegalThreadStateException e){
+					//System.out.println(listParticipant.indexOf(p)+1+" Still running");
+					continue;
+				}
+			}
+			//Thread.sleep(1000);
+			recvdMsg = host_nc.getReceivedMsgs();
+			//System.out.println(recvdMsg);
+			if(!recvdMsg.isEmpty())
+			{
+				for(List<String> s: recvdMsg){
+				if(s.get(1).equals("COMMIT")){
+					host_conf.logger.info("Committed");
+					receivedResponse = true;
+				}
+				else if(s.get(1).equals("ABORT")){
+					host_conf.logger.info("Command Aborted");
+					receivedResponse = true;
+				/* }else if(s.get(1).equals("FAILING")){
+					if(s.get(0).equals("1"))
+						currentCoordinator = 2;
+					host_conf.logger.info("Starting Process "+s.get(0)+" Again");
+					Process p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + s.get(0));
+					listParticipant.set(Integer.parseInt(s.get(0))-1, p); */
+				} 
+				}
+				if(receivedResponse)
+					break;
+				//if(System.currentTimeMillis() - start > 10000L)
+				//	break;
+			}		
+		}
+		
+	}
+
 	private static void multipleFailure() throws IOException, InterruptedException {
 		;
 	}

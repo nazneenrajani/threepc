@@ -33,14 +33,17 @@ public class Participant {
 	static String myState;
 	static String myVoteStr;
 	static String finalDecision;
+	static Integer deathAfterN = -1;
+	static Integer deathAfterP = -1;
 	static String command = "NULL";
 	static String param1 = "NULL";
 	static String param2 = "NULL";
-
+	static Integer totalMessagesReceived=0;
 	static String failurePoint;
 	static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
 	static String binPath = "/home/nazneen/workspace/threepc/dc_project/bin/";
 	static String logPath = "/home/nazneen/logs/";
+	static Integer[] msgFromP;
 	/*static String confPath = "C:/Users/Harsh/Documents/GitHub/threepc/config.properties"; //TODO read these from config file
 	static String binPath = "C:/Users/Harsh/Documents/GitHub/threepc/dc_project/bin/";
 	static String logPath = "C:/Users/Harsh/Desktop/logs/";*/
@@ -57,7 +60,10 @@ public class Participant {
 			failurePoint = args[1];
 		else
 			failurePoint="";
-
+		if(args.length > 2){
+			deathAfterN = Integer.parseInt(args[2]);
+			deathAfterP = Integer.parseInt(args[3]);
+		}
 		Boolean isRecoveryMode = false;
 		File file = new File(logPath+"participant_"+id+".DTlog");
 		FileWriter fw;
@@ -79,6 +85,9 @@ public class Participant {
 		}
 		conf = new Config(confPath);
 		conf.procNum=id;
+		msgFromP= new Integer[conf.numProcesses];
+		for(int i =0;i< conf.numProcesses;i++)
+			msgFromP[i]=0;
 		conf.logger.addHandler(fh);
 		SimpleFormatter formatter = new SimpleFormatter();
 		fh.setFormatter(formatter);
@@ -236,6 +245,16 @@ public class Participant {
 			Thread.sleep(delay);
 			List<List<String>> recvMsg= nc.getReceivedMsgs();
 			bufferedMessages.addAll(recvMsg);
+			totalMessagesReceived+=recvMsg.size();
+			for(List<String> s : recvMsg){
+				int p = Integer.parseInt(s.get(0));
+				msgFromP[p]+=1;
+				if(deathAfterP > 0 && msgFromP[deathAfterP] >= deathAfterN){
+					log("Failed after "+deathAfterN+" messages from "+deathAfterP);
+					nc.sendMsg(0, "FAILING");
+					System.exit(1);	
+				}
+			}
 			if(!bufferedMessages.isEmpty()){
 				ListIterator<List<String>> it = bufferedMessages.listIterator();
 				while(it.hasNext()){
@@ -430,6 +449,16 @@ public class Participant {
 			}
 			List<List<String>> recMsg = nc.getReceivedMsgs();
 			bufferedMessages.addAll(recMsg);
+			totalMessagesReceived+=recMsg.size();
+			for(List<String> s : recMsg){
+				int p = Integer.parseInt(s.get(0));
+				msgFromP[p]+=1;
+				if(deathAfterP > 0 && msgFromP[deathAfterP] >= deathAfterN){
+					log("Failed after "+deathAfterN+" messages from "+deathAfterP);
+					nc.sendMsg(0, "FAILING");
+					System.exit(1);	
+				}
+			}
 			if(!bufferedMessages.isEmpty()){
 				ListIterator<List<String>> it = bufferedMessages.listIterator();
 				while(it.hasNext()){
@@ -462,6 +491,16 @@ public class Participant {
 							}
 							List<List<String>> recvMsg = nc.getReceivedMsgs();
 							bufferedMessages.addAll(recvMsg);
+							totalMessagesReceived+=recvMsg.size();
+							for(List<String> s1 : recvMsg){
+								int p = Integer.parseInt(s1.get(0));
+								msgFromP[p]+=1;
+								if(deathAfterP > 0 && msgFromP[deathAfterP] >= deathAfterN){
+									log("Failed after "+deathAfterN+" messages from "+deathAfterP);
+									nc.sendMsg(0, "FAILING");
+									System.exit(1);	
+								}
+							}
 							if(!bufferedMessages.isEmpty()){
 								Iterator<List<String> > it1 = bufferedMessages.iterator();
 								while(it1.hasNext()){
@@ -616,7 +655,18 @@ public class Participant {
 		Long start = System.currentTimeMillis();
 		while(System.currentTimeMillis() - start < 2*timeOut){
 			Thread.sleep(delay);
-			bufferedMessages.addAll(nc.getReceivedMsgs());// TODO some people may still not have got final decision
+			List<List<String>> recMsg =nc.getReceivedMsgs();
+			bufferedMessages.addAll(recMsg);// TODO some people may still not have got final decision
+			totalMessagesReceived+= recMsg.size();
+			for(List<String> s : recMsg){
+				int p = Integer.parseInt(s.get(0));
+				msgFromP[p]+=1;
+				if(deathAfterP > 0 && msgFromP[deathAfterP] >= deathAfterN){
+					log("Failed after "+deathAfterN+" messages from "+deathAfterP);
+					nc.sendMsg(0, "FAILING");
+					System.exit(1);	
+				}
+			}
 			if(!bufferedMessages.isEmpty()){
 				ListIterator<List<String>> it = bufferedMessages.listIterator();
 				while(it.hasNext()){
@@ -666,6 +716,16 @@ public class Participant {
 			Thread.sleep(delay);
 			List<List<String>> currVotes= nc.getReceivedMsgs();
 			bufferedMessages.addAll(currVotes);
+			totalMessagesReceived += currVotes.size();
+			for(List<String> s : currVotes){
+				int p = Integer.parseInt(s.get(0));
+				msgFromP[p]+=1;
+				if(deathAfterP > 0 && msgFromP[deathAfterP] >= deathAfterN){
+					log("Failed after "+deathAfterN+" messages from "+deathAfterP);
+					nc.sendMsg(0, "FAILING");
+					System.exit(1);	
+				}
+			}
 			ListIterator<List<String>> it = bufferedMessages.listIterator();
 			while(it.hasNext()){
 				List<String> s = it.next();
@@ -757,6 +817,16 @@ public class Participant {
 			}
 			List<List<String>> recMsg = nc.getReceivedMsgs();
 			bufferedMessages.addAll(recMsg);
+			totalMessagesReceived += recMsg.size();
+			for(List<String> s : recMsg){
+				int p = Integer.parseInt(s.get(0));
+				msgFromP[p]+=1;
+				if(deathAfterP > 0 && msgFromP[deathAfterP] >= deathAfterN){
+					log("Failed after "+deathAfterN+" messages from "+deathAfterP);
+					nc.sendMsg(0, "FAILING");
+					System.exit(1);	
+				}
+			}
 			ListIterator<List<String>> it = bufferedMessages.listIterator();
 			while(it.hasNext()){
 				List<String> s = it.next();
@@ -821,6 +891,16 @@ public class Participant {
 			}
 			List<List<String>> recMsg = nc.getReceivedMsgs();
 			bufferedMessages.addAll(recMsg);
+			totalMessagesReceived += recMsg.size();
+			for(List<String> s : recMsg){
+				int p = Integer.parseInt(s.get(0));
+				msgFromP[p]+=1;
+				if(deathAfterP > 0 && msgFromP[deathAfterP] >= deathAfterN){
+					log("Failed after "+deathAfterN+" messages from "+deathAfterP);
+					nc.sendMsg(0, "FAILING");
+					System.exit(1);	
+				}
+			}
 			if(!bufferedMessages.isEmpty()){
 				//log(bufferedMessages+"");
 				ListIterator<List<String>> it = bufferedMessages.listIterator();
@@ -860,6 +940,16 @@ public class Participant {
 							}
 							List<List<String>> recvMsg = nc.getReceivedMsgs();
 							bufferedMessages.addAll(recvMsg);
+							totalMessagesReceived += recvMsg.size();
+							for(List<String> s2 : recvMsg){
+								int p = Integer.parseInt(s2.get(0));
+								msgFromP[p]+=1;
+								if(deathAfterP > 0 && msgFromP[deathAfterP] >= deathAfterN){
+									log("Failed after "+deathAfterN+" messages from "+deathAfterP);
+									nc.sendMsg(0, "FAILING");
+									System.exit(1);	
+								}
+							}
 							if(!bufferedMessages.isEmpty()){
 								Iterator<List<String>> it1 = bufferedMessages.iterator();
 								while(it1.hasNext()){

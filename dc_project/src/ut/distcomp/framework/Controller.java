@@ -12,16 +12,10 @@ public class Controller {
 	static NetController host_nc;
 	static int currentCoordinator = 1;
 	static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
-	static String binPath = "/home/nazneen/workspace/threepc/dc_project/bin/";
-	static String logPath = "/home/nazneen/logs/";
-	/*static String confPath = "C:/Users/Harsh/Documents/GitHub/threepc/config.properties"; //TODO read these from config file
-	static String binPath = "C:/Users/Harsh/Documents/GitHub/threepc/dc_project/bin/";
-	static String logPath = "C:/Users/Harsh/Desktop/logs/";*/
-//	static String confPath = "/home/harshp/code/threepc/config.properties"; //TODO read these from config file
-//	static String binPath = "/home/harshp/code/threepc/dc_project/bin/";
-//	static String logPath = "/home/harshp/logs/";
+	static String binPath;
+	static String logPath;
 	static long delay = 10;
-	
+
 	public static void main(String[] args) throws FileNotFoundException, IOException, InterruptedException{
 		host_conf = new Config(confPath);
 		host_nc = new NetController(host_conf);
@@ -34,36 +28,39 @@ public class Controller {
 			}
 		});
 		host_conf.procNum = 0;
-
+		binPath = host_conf.binPath;
+		logPath = host_conf.logPath;
 		//noFailuresTest();
-		
+
 		//participantFailure(); // Participant is not able to use port again on coming back if we use messages. Need to exit gracefully
 
 		//cascadingCoordinatorFailure(); // some process sends STATE_REQ to another, but other puts it in buffer and forgets about it. Then thinks the first is dead
 
 		//futureCoordinatorFailure();
 
-		//partialPrecommitFailure();
+		partialPrecommitFailure();
+
+		//precommitFailure();
 
 		//partialCommitFailure(); // Works okay except 2 is not expecting to be made coordinator. 3 updates its UP incorrectly
 
 		//totalFailure2(); 
-		
+
 		//multipleFailure(); // TODO
-		int[] n = new int[host_conf.numProcesses];
-		int[] p = new int[host_conf.numProcesses];
-		for(int i=0;i<host_conf.numProcesses; i++){
-			n[i]=-1;
-			p[i]=-1;
-		}
-		n[5]=2;
-		p[5]=1;
-		deathAfter(n,p);
-		
+		//		int[] n = new int[host_conf.numProcesses];
+		//		int[] p = new int[host_conf.numProcesses];
+		//		for(int i=0;i<host_conf.numProcesses; i++){
+		//			n[i]=-1;
+		//			p[i]=-1;
+		//		}
+		//		n[5]=2;
+		//		p[5]=1;
+		//		deathAfter(n,p);
+
 		host_conf.logger.info("Shutting down");
 		System.exit(0);
 	}
-	
+
 	private static void deathAfter(int[] n, int[] p) throws InterruptedException, IOException {
 		int participants = host_conf.numProcesses;
 		List<List<String>> recvdMsg;
@@ -109,20 +106,20 @@ public class Controller {
 			if(!recvdMsg.isEmpty())
 			{
 				for(List<String> s: recvdMsg){
-				if(s.get(1).equals("COMMIT")){
-					host_conf.logger.info("Committed");
-					receivedResponse = true;
-				}
-				else if(s.get(1).equals("ABORT")){
-					host_conf.logger.info("Command Aborted");
-					receivedResponse = true;
-				/* }else if(s.get(1).equals("FAILING")){
+					if(s.get(1).equals("COMMIT")){
+						host_conf.logger.info("Committed");
+						receivedResponse = true;
+					}
+					else if(s.get(1).equals("ABORT")){
+						host_conf.logger.info("Command Aborted");
+						receivedResponse = true;
+						/* }else if(s.get(1).equals("FAILING")){
 					if(s.get(0).equals("1"))
 						currentCoordinator = 2;
 					host_conf.logger.info("Starting Process "+s.get(0)+" Again");
 					Process p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + s.get(0));
 					listParticipant.set(Integer.parseInt(s.get(0))-1, p); */
-				} 
+					} 
 				}
 				if(receivedResponse)
 					break;
@@ -130,7 +127,15 @@ public class Controller {
 				//	break;
 			}		
 		}
-		
+
+	}
+
+	private static void partialPrecommitFailure() throws IOException, InterruptedException {
+		String[] errorlocations =  new String[host_conf.numProcesses];
+		for(int i=1;i<host_conf.numProcesses;i++)
+			errorlocations[i] = "";
+		errorlocations[1]="COORDINATOR_PARTIAL_PRECOMMIT";
+		genericFailure(errorlocations);
 	}
 
 	private static void multipleFailure() throws IOException, InterruptedException {
@@ -144,7 +149,7 @@ public class Controller {
 			errorlocations[i] = "AFTER_VOTE";
 		genericFailure(errorlocations);
 	}
-	
+
 	private static void totalFailure2() throws IOException, InterruptedException {
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		errorlocations[1]="COORDINATOR_AFTER_PRECOMMIT";
@@ -155,7 +160,7 @@ public class Controller {
 			errorlocations[i] = "AFTER_VOTE";
 		genericFailure(errorlocations);
 	}
-	
+
 	private static void partialCommitFailure() throws IOException, InterruptedException {
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		for(int i=1;i<host_conf.numProcesses;i++)
@@ -163,15 +168,15 @@ public class Controller {
 		errorlocations[1]="COORDINATOR_PARTIAL_COMMIT";
 		genericFailure(errorlocations);
 	}
-	
-	private static void partialPrecommitFailure() throws IOException, InterruptedException {
+
+	private static void precommitFailure() throws IOException, InterruptedException {
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		for(int i=1;i<host_conf.numProcesses;i++)
 			errorlocations[i] = "";
 		errorlocations[1]="COORDINATOR_AFTER_PRECOMMIT";
 		genericFailure(errorlocations);
 	}
-	
+
 	private static void futureCoordinatorFailure() throws IOException, InterruptedException {
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		for(int i=1;i<host_conf.numProcesses;i++)
@@ -180,7 +185,7 @@ public class Controller {
 		errorlocations[2]="AFTER_VOTE";
 		genericFailure(errorlocations);
 	}
-	
+
 	private static void cascadingCoordinatorFailure() throws IOException, InterruptedException {
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		for(int i=1;i<host_conf.numProcesses;i++)
@@ -190,7 +195,7 @@ public class Controller {
 		errorlocations[3]="ELECTED_COORDINATOR_FAIL_AFTER_STATE_REQ";
 		genericFailure(errorlocations);
 	}
-	
+
 	private static void participantFailure() throws IOException, InterruptedException {
 		String[] errorlocations =  new String[host_conf.numProcesses];
 		for(int i=1;i<host_conf.numProcesses;i++)
@@ -206,7 +211,7 @@ public class Controller {
 			errorlocations[i] = "";
 		genericFailure(errorlocations);
 	}
-	
+
 	private static void deleteDTLog(){
 		for(int i = 1; i < host_conf.numProcesses;i++){
 			File file = new File(logPath +"participant_"+i+".DTlog");
@@ -217,7 +222,7 @@ public class Controller {
 			file2.delete();
 		}
 	}
-	
+
 	private static void genericFailure(String[] errorlocations) throws IOException, InterruptedException {	
 		int participants = host_conf.numProcesses;
 		List<List<String>> recvdMsg;
@@ -263,20 +268,20 @@ public class Controller {
 			if(!recvdMsg.isEmpty())
 			{
 				for(List<String> s: recvdMsg){
-				if(s.get(1).equals("COMMIT")){
-					host_conf.logger.info("Committed");
-					receivedResponse = true;
-				}
-				else if(s.get(1).equals("ABORT")){
-					host_conf.logger.info("Command Aborted");
-					receivedResponse = true;
-				/* }else if(s.get(1).equals("FAILING")){
+					if(s.get(1).equals("COMMIT")){
+						host_conf.logger.info("Committed");
+						receivedResponse = true;
+					}
+					else if(s.get(1).equals("ABORT")){
+						host_conf.logger.info("Command Aborted");
+						receivedResponse = true;
+						/* }else if(s.get(1).equals("FAILING")){
 					if(s.get(0).equals("1"))
 						currentCoordinator = 2;
 					host_conf.logger.info("Starting Process "+s.get(0)+" Again");
 					Process p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + s.get(0));
 					listParticipant.set(Integer.parseInt(s.get(0))-1, p); */
-				} 
+					} 
 				}
 				if(receivedResponse)
 					break;

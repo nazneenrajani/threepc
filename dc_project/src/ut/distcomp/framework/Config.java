@@ -15,6 +15,8 @@ import java.util.Properties;
 import java.util.logging.Logger;
 
 public class Config {
+	String binPath = "/home/nazneen/workspace/threepc/dc_project/bin/";
+	String logPath = "/home/nazneen/logs/";
 
 	/**
 	 * Loads config from a file.  Optionally puts in 'procNum' if in file.
@@ -40,6 +42,8 @@ public class Config {
 		} else {
 			logger.info("procNum not loaded from file");
 		}
+		binPath = prop.getProperty("binPath");
+		logPath = prop.getProperty("logPath");
 	}
 	
 	private int loadInt(Properties prop, String s) {

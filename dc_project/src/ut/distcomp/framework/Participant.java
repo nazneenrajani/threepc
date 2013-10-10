@@ -40,20 +40,13 @@ public class Participant {
 	static String param2 = "NULL";
 	static Integer totalMessagesReceived=0;
 	static String failurePoint;
-	static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
-	static String binPath = "/home/nazneen/workspace/threepc/dc_project/bin/";
-	static String logPath = "/home/nazneen/logs/";
+	static String confPath = "/home/nazneen/workspace/threepc/config.properties";
+	static String binPath;
+	static String logPath;
 	static Integer[] msgFromP;
-	/*static String confPath = "C:/Users/Harsh/Documents/GitHub/threepc/config.properties"; //TODO read these from config file
-	static String binPath = "C:/Users/Harsh/Documents/GitHub/threepc/dc_project/bin/";
-	static String logPath = "C:/Users/Harsh/Desktop/logs/";*/
-	//	static String confPath = "/home/harshp/code/threepc/config.properties"; //TODO read these from config file
-	//	static String binPath = "/home/harshp/code/threepc/dc_project/bin/";
-	//	static String logPath = "/home/harshp/logs/";
 	static long delay = 10;
 
 	public static void main(String[] args) throws FileNotFoundException, IOException, InterruptedException{
-		playList = new PlayList();
 		bufferedMessages = new ArrayList<List<String>>();
 		id=Integer.parseInt(args[0]);
 		if(args.length>1)
@@ -64,6 +57,12 @@ public class Participant {
 			deathAfterN = Integer.parseInt(args[2]);
 			deathAfterP = Integer.parseInt(args[3]);
 		}
+		conf = new Config(confPath);
+		conf.procNum=id;
+		binPath = conf.binPath;
+		logPath = conf.logPath;
+		playList = new PlayList();
+		
 		Boolean isRecoveryMode = false;
 		File file = new File(logPath+"participant_"+id+".DTlog");
 		FileWriter fw;
@@ -83,8 +82,6 @@ public class Participant {
 		else{
 			fh = new FileHandler(logPath+"participant_"+id+".log", true);
 		}
-		conf = new Config(confPath);
-		conf.procNum=id;
 		msgFromP= new Integer[conf.numProcesses];
 		for(int i =0;i< conf.numProcesses;i++)
 			msgFromP[i]=0;
@@ -526,7 +523,7 @@ public class Participant {
 		param1 = par1;
 		param2 = par2;
 		Boolean vote = true;
-		if(conf.procNum==4 || conf.procNum==6){
+		if(conf.procNum==-1 || conf.procNum==-1){
 			myVoteStr = "NO";
 			DTLogWrite("NO");
 			vote = false;
@@ -597,7 +594,19 @@ public class Participant {
 		if(!isAbort){
 			DTLogWrite("PRECOMMIT");
 			log("Decided PRECOMMIT");
-			broadcast("PRECOMMIT");
+			Boolean[] recipients = new Boolean[conf.numProcesses];
+			for(int i=0;i<conf.numProcesses;i++)
+				if(i<conf.numProcesses/2)
+					recipients[i]=true;
+				else
+					recipients[i]=false;
+			multicast("PRECOMMIT", recipients);
+			failHere("COORDINATOR_PARTIAL_PRECOMMIT");
+			Boolean[] invrecipients = new Boolean[conf.numProcesses];
+			for(int i=0;i<conf.numProcesses;i++)
+				invrecipients[i]=!recipients[i];
+			multicast("PRECOMMIT", invrecipients);
+			//broadcast("PRECOMMIT");
 			myState = "COMMITABLE";
 			failHere("COORDINATOR_AFTER_PRECOMMIT");
 		}

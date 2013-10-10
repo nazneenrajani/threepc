@@ -1,0 +1,64 @@
+Oct 09, 2013 8:58:22 PM ut.distcomp.framework.ListenServer <init>
+INFO: Server 1: Server connection established
+Oct 09, 2013 8:58:22 PM ut.distcomp.framework.Participant log
+INFO: Process 1 initialized
+Oct 09, 2013 8:58:22 PM ut.distcomp.framework.Participant log
+INFO: Started Normal mode
+Oct 09, 2013 8:58:22 PM ut.distcomp.framework.NetController getReceivedMsgs
+INFO: Received INVOKE_3PC##add##a##a.song from 0
+Oct 09, 2013 8:58:22 PM ut.distcomp.framework.Participant log
+INFO: Received [0, INVOKE_3PC##add##a##a.song] from Controller
+Oct 09, 2013 8:58:22 PM ut.distcomp.framework.Participant log
+INFO: Sending VOTE_REQ
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController initOutgoingConn
+INFO: Server 1: Socket to 2 established
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message VOTE_REQ##add##a##a.song to 2
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController initOutgoingConn
+INFO: Server 1: Socket to 3 established
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message VOTE_REQ##add##a##a.song to 3
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController initOutgoingConn
+INFO: Server 1: Socket to 4 established
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message VOTE_REQ##add##a##a.song to 4
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController initOutgoingConn
+INFO: Server 1: Socket to 5 established
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message VOTE_REQ##add##a##a.song to 5
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController initOutgoingConn
+INFO: Server 1: Socket to 6 established
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message VOTE_REQ##add##a##a.song to 6
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController getReceivedMsgs
+INFO: Received YES from 2
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController getReceivedMsgs
+INFO: Received YES from 3
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController getReceivedMsgs
+INFO: Received YES from 5
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController getReceivedMsgs
+INFO: Received NO from 4
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController getReceivedMsgs
+INFO: Received NO from 6
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.Participant log
+INFO: [YES, YES, YES, YES, NO, YES, NO]
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.Participant log
+INFO: Deciding ABORT
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message ABORT to 2
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message ABORT to 3
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message ABORT to 5
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.Participant log
+INFO: here
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.Participant log
+INFO: bufferedMessages =[]
+Oct 09, 2013 8:58:23 PM ut.distcomp.framework.Participant log
+INFO: Could not complete action add a a.song
+Oct 09, 2013 8:58:27 PM ut.distcomp.framework.Participant log
+INFO: Reached end of sendFinalDecision
+Oct 09, 2013 8:58:27 PM ut.distcomp.framework.NetController initOutgoingConn
+INFO: Server 1: Socket to 0 established
+Oct 09, 2013 8:58:27 PM ut.distcomp.framework.NetController sendMsg
+INFO: Sent message ABORT to 0

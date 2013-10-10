@@ -38,7 +38,7 @@ public class Controller {
 
 		//futureCoordinatorFailure();
 
-		partialPrecommitFailure();
+		//partialPrecommitFailure();
 
 		//precommitFailure();
 
@@ -46,19 +46,24 @@ public class Controller {
 
 		//totalFailure2(); 
 
-		//multipleFailure(); // TODO
-		//		int[] n = new int[host_conf.numProcesses];
-		//		int[] p = new int[host_conf.numProcesses];
-		//		for(int i=0;i<host_conf.numProcesses; i++){
-		//			n[i]=-1;
-		//			p[i]=-1;
-		//		}
-		//		n[5]=2;
-		//		p[5]=1;
-		//		deathAfter(n,p);
+		multipleFailure(); 
+
+		//deathAfterFailure();
 
 		host_conf.logger.info("Shutting down");
 		System.exit(0);
+	}
+
+	private static void deathAfterFailure() throws InterruptedException, IOException {
+		int[] n = new int[host_conf.numProcesses];
+		int[] p = new int[host_conf.numProcesses];
+		for(int i=0;i<host_conf.numProcesses; i++){
+			n[i]=-1;
+			p[i]=-1;
+		}
+		n[5]=2;
+		p[5]=1;
+		deathAfter(n,p);
 	}
 
 	private static void deathAfter(int[] n, int[] p) throws InterruptedException, IOException {
@@ -138,8 +143,98 @@ public class Controller {
 		genericFailure(errorlocations);
 	}
 
-	private static void multipleFailure() throws IOException, InterruptedException {
-		;
+	private static void multipleFailure() throws IOException, InterruptedException{
+		String[] errorlocations =  new String[host_conf.numProcesses];
+		errorlocations[1]="COORDINATOR_AFTER_PRECOMMIT";
+		errorlocations[2]="AFTER_VOTE";
+		errorlocations[3]="AFTER_VOTE";
+		errorlocations[4]="AFTER_VOTE";
+		for(int i=5;i<host_conf.numProcesses;i++)
+			errorlocations[i] = "AFTER_VOTE";
+		String[] errorlocations2 =  new String[host_conf.numProcesses];
+		errorlocations2[1]="COORDINATOR_PARTIAL_COMMIT";
+		errorlocations2[2]="RECOVERY_PARTICIPANT_FAIL_AFTER_PRECOMMIT";
+		errorlocations2[3]="RECOVERY_PARTICIPANT_FAIL_AFTER_STATE_REQ";
+		errorlocations2[4]="RECOVERY_PARTICIPANT_FAIL_AFTER_PRECOMMIT";
+		for(int i=5;i<host_conf.numProcesses;i++)
+			errorlocations2[i] = "AFTER_VOTE";
+		multipleFailureGeneric(errorlocations, errorlocations2);	
+	}
+
+	private static void multipleFailureGeneric(String[] errorlocations,String[] errorlocations2) throws IOException, InterruptedException {
+		int participants = host_conf.numProcesses;
+		List<List<String>> recvdMsg;
+
+		deleteDTLog();
+		listParticipant= new ArrayList<Process>();	
+		for(int i = 1; i <participants; i++){
+			Process p = null;
+			p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant "+ i + " "+errorlocations[i]);
+			listParticipant.add(i-1,p);
+		}
+		Thread.sleep(1000);
+		//TODO wait for processes to stasrt
+		int c= findCoordinator();
+		//Iterator it = recvdMsg.iterator();
+		String command = "add";
+		String s1 = "a";
+		String s2 = "a.song";
+		host_nc.sendMsg(c, "INVOKE_3PC##"+command+"##"+s1+"##"+s2);
+		Long start = System.currentTimeMillis();
+		Boolean receivedResponse = false;
+		Boolean[] failedOnce = new Boolean[host_conf.numProcesses];
+		for(int i=0;i<host_conf.numProcesses; i++)
+			failedOnce[i] = false;
+		while(true){
+			Thread.sleep(delay);
+			//System.out.println("In loop");					receivedResponse = true;
+
+			for(Process p:listParticipant){
+				try{
+					System.out.println(p.exitValue());
+					System.out.println((listParticipant.indexOf(p)+1) + " Dead");
+					int index = listParticipant.indexOf(p);
+					host_conf.logger.info("Starting Process "+(listParticipant.indexOf(p)+1)+" Again");
+					if(failedOnce[index+1])
+						p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + (listParticipant.indexOf(p)+1));
+					else{
+						p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + (listParticipant.indexOf(p)+1)+" "+ errorlocations2[index+1]);
+						failedOnce[index+1] = true;
+					}
+					listParticipant.set(index, p);
+					//TODO restart p
+				}catch(IllegalThreadStateException e){
+					//System.out.println(listParticipant.indexOf(p)+1+" Still running");
+					continue;
+				}
+			}
+			//Thread.sleep(1000);
+			recvdMsg = host_nc.getReceivedMsgs();
+			//System.out.println(recvdMsg);
+			if(!recvdMsg.isEmpty())
+			{
+				for(List<String> s: recvdMsg){
+					if(s.get(1).equals("COMMIT")){
+						host_conf.logger.info("Committed");
+						receivedResponse = true;
+					}
+					else if(s.get(1).equals("ABORT")){
+						host_conf.logger.info("Command Aborted");
+						receivedResponse = true;
+						/* }else if(s.get(1).equals("FAILING")){
+					if(s.get(0).equals("1"))
+						currentCoordinator = 2;
+					host_conf.logger.info("Starting Process "+s.get(0)+" Again");
+					Process p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + s.get(0));
+					listParticipant.set(Integer.parseInt(s.get(0))-1, p); */
+					} 
+				}
+				if(receivedResponse)
+					break;
+				//if(System.currentTimeMillis() - start > 10000L)
+				//	break;
+			}		
+		}
 	}
 
 	private static void totalFailure() throws IOException, InterruptedException {

@@ -32,7 +32,7 @@ PlayList: Simple class using hashtables
 Controller: This is the starting point for our program and has procNum=0 and does not participate in 3PC. It spawns n-1 other processes and sends a message invoking 3PC over the socket. This file also includes different test cases implemented as method.
 Participant: This is the starting point for each of the n-1 processes and is called by the Controller with the following arguments:
 *procNum(1 to n-1)
-*failurePoint: (optional argument) Several important points in the code have labels assigned. Participant fails at the point where label==failurePoint
+*failurePoint: (optional argument) Several important points in the code have labels assigned. Participant fails at the point where label==failurePoint. Permitted labels are described in possibleFailurePoints.txt
 *deathAfterN: (optional argument) n for the deathAfter case in test cases, ignored if ==-1
 *deathAfterP: (optional argument) p for the deathAfter case in test cases, ignored if ==-1
 

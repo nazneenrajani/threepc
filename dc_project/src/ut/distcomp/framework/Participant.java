@@ -145,6 +145,7 @@ public class Participant {
 			}
 		}
 		else{
+			failHere("FAIL_AFTER_RECOVERY");
 			log("Entering Recovery mode");
 			myState="";
 			String[] s =  returnLastLog();
@@ -358,6 +359,7 @@ public class Participant {
 				lastString = "UP##"+lastString;
 				broadcast(lastString);
 			}
+			failHere("PARTICIPANT_RECOVERY");
 			if(totalFailureDetected || finalDecisionReceived)
 				break;
 		}
@@ -569,7 +571,8 @@ public class Participant {
 		List<String> exp = new ArrayList<String>();
 		exp.add("YES");
 		exp.add("NO");
-		String[] votes=collectResults(exp,myVoteStr);	
+		String[] votes=collectResults(exp,myVoteStr);
+		failHere("COORDINATOR_AFTER_VOTECOLLECT");
 		boolean isAbort = false;
 		// Decide "PC" or Abort
 		log(Arrays.toString(votes));
@@ -878,7 +881,7 @@ public class Participant {
 				}
 			}
 		}
-
+		failHere("RECOVERY_PARTICIPANT_FAIL_AFTER_STATE_REQ");
 		if(myVoteStr.equals("NOT_VOTED") || myVoteStr.equals("NO") || returnLastLog()[0].equals("ABORT"))
 			myState = "ABORTED";
 		else if(returnLastLog()[0].equals("COMMIT"))
@@ -938,6 +941,7 @@ public class Participant {
 						myState = "COMMITABLE";
 						nc.sendMsg(getCoordinator(), "ACK");
 						it.remove();
+						failHere("RECOVERY_PARTICIPANT_FAIL_AFTER_PRECOMMIT");
 						long start1 = System.currentTimeMillis();
 						while(true){
 							Thread.sleep(delay);

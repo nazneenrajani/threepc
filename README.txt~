@@ -38,7 +38,7 @@ Participant: This is the starting point for each of the n-1 processes and is cal
 
 The Controller's job is to spawn processes and invoke 3PC, thereafter the Participants execute the 3PC algorithm as described in the paper.
 
-Currently the votes of processes are hard-coded in the castVote(..) method in Participant.java and can be modified there
+Currently the votes of processes are hard-coded in the castVote(..) method for participants and invoke_3PC() for coordinator. They and can be modified in the respective functions.
 
 How to run:
 ------------

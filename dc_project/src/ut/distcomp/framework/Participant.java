@@ -33,6 +33,9 @@ public class Participant {
 	static String myState;
 	static String myVoteStr;
 	static String finalDecision;
+	static String command = "NULL";
+	static String param1 = "NULL";
+	static String param2 = "NULL";
 
 	static String failurePoint;
 	static String confPath = "/home/nazneen/workspace/threepc/config.properties"; //TODO read these from config file
@@ -47,13 +50,14 @@ public class Participant {
 	static long delay = 10;
 
 	public static void main(String[] args) throws FileNotFoundException, IOException, InterruptedException{
+		playList = new PlayList();
 		bufferedMessages = new ArrayList<List<String>>();
 		id=Integer.parseInt(args[0]);
 		if(args.length>1)
 			failurePoint = args[1];
 		else
 			failurePoint="";
-		
+
 		Boolean isRecoveryMode = false;
 		File file = new File(logPath+"participant_"+id+".DTlog");
 		FileWriter fw;
@@ -80,7 +84,7 @@ public class Participant {
 		fh.setFormatter(formatter);
 		nc = new NetController(conf);
 		System.setErr(new PrintStream(new FileOutputStream(logPath +"participant_"+id+".err")));
-		
+
 		lastCoordinator = 1;
 		myVoteStr = "NOT_VOTED";
 		finalDecision="";
@@ -120,7 +124,7 @@ public class Participant {
 								myState = "ABORTED";
 								DTLogWrite("ABORT");
 								log("ABORT");
-								abort();
+								//abort();
 							}
 							else
 								waitForDecision();
@@ -142,6 +146,10 @@ public class Participant {
 			lastCoordinator = Integer.parseInt(s[1]);
 			String[] upString = s[2].split(",");
 			myVoteStr = s[3];
+			command = s[4];
+			param1 = s[5];
+			param2 = s[6];
+			
 			for(int k = 0; k < conf.numProcesses;k++)
 				UP[k] = Integer.parseInt(upString[k]);
 			switch(lastState){
@@ -270,13 +278,13 @@ public class Participant {
 					}else if(s.get(1).equals("COMMIT")){
 						myState = "COMMITTED";
 						DTLogWrite("COMMIT");
-						commit();
+						//commit();
 						finalDecisionReceived = true;
 						it.remove();
 					}else if(s.get(1).equals("ABORT")){
 						myState = "ABORTED";
 						DTLogWrite("ABORT");
-						abort();
+						//abort();
 						finalDecisionReceived = true;
 						it.remove();
 					}
@@ -306,7 +314,7 @@ public class Participant {
 						finalDecisionReceived = true;*/
 					}
 					else if(s.get(1).equals("STATE_REQ")){
-					/*	//Someone elected himself coordinator. We're doing the election again
+						/*	//Someone elected himself coordinator. We're doing the election again
 						it.remove();
 						if(myState.equals("COMMITTED"))
 							broadcast("COMMIT");
@@ -347,22 +355,41 @@ public class Participant {
 		}
 		else{
 			if(myState.equals("COMMITTED"))
-				commit();
+				sendFinalDecision(false);//commit();
 			else if(myState.equals("ABORTED"))
-				abort();
+				sendFinalDecision(true);//abort();
 			else
 				conf.logger.severe("Invalid state at end of participant recovery");
 		}
 	}
 
 	private static void commit() {
-		// TODO Auto-generated method stub
-
+		switch(command){
+		case "add":
+			log("Added {"+param1+", "+param2+"} to playlist.");
+			playList.add(param1, param2);
+			break;
+		case "delete":
+			log("Deleted "+param1+" from playlist.");
+			playList.delete(param1);
+			break;
+		case "editName":
+			log("Edited {"+param1+", "+param2+"} in playlist.");
+			playList.editName(param1, param2);
+			break;
+		case "editUrl":
+			log("Edited {"+param1+", "+param2+"} in playlist.");
+			playList.editUrl(param1, param2);
+			break;
+		case "NULL":
+			conf.logger.severe("Invalid NULL command");
+		default:
+			conf.logger.severe("Unrecognised command "+command);
+		}
 	}
 
 	private static void abort() {
-		// TODO Auto-generated method stub
-
+		log("Could not complete action "+command+" "+param1+ " "+param2 );
 	}
 
 	private static String[] returnLastLog() {
@@ -455,20 +482,12 @@ public class Participant {
 		}
 	}
 
-	private static Boolean castVote(String command, String param1, String param2) {
-		switch(command){
-		case "add":
-			conf.logger.info("Received add command");
-			break;
-		case "delete":
-			conf.logger.info("Received delete command");
-			break;
-		case "edit":
-			conf.logger.info("Received edit command");
-			break;
-		}
+	private static Boolean castVote(String comm, String par1, String par2) {
+		command = comm;
+		param1 = par1;
+		param2 = par2;
 		Boolean vote = true;
-		if(conf.procNum==-1){
+		if(conf.procNum==4 || conf.procNum==6){
 			myVoteStr = "NO";
 			DTLogWrite("NO");
 			vote = false;
@@ -503,6 +522,9 @@ public class Participant {
 	public static boolean invokeThreePC(String message, String s1, String s2) throws InterruptedException{
 		// Vote REQ
 		log("Sending VOTE_REQ");
+		command = message;
+		param1 = s1;
+		param2 = s2;
 		broadcast("VOTE_REQ##"+message+"##"+s1+"##"+s2);
 		DTLogWrite("START_3PC");
 		myVoteStr = "YES"; 
@@ -544,7 +566,7 @@ public class Participant {
 			sendFinalDecision(true);
 			return false;
 		}
-		
+
 		//may need to send abort else send rpecommti and wait for ack
 		exp = new ArrayList<String>();
 		exp.add("ACK");
@@ -566,7 +588,6 @@ public class Participant {
 		multicast("COMMIT", invrecipients);
 		//broadcast("COMMIT");
 		// Send "Commit"
-		commit();
 		sendFinalDecision(false);
 		return true;
 	}
@@ -581,10 +602,15 @@ public class Participant {
 
 	private static void sendFinalDecision(boolean isAbort) throws InterruptedException {
 		log("bufferedMessages ="+bufferedMessages);
-		if((myState.equals("ABORTED")))
+		if((myState.equals("ABORTED"))){
 			finalDecision = "ABORT";
-		else if(myState.equals("COMMITTED"))
+			abort();
+		}
+		else if(myState.equals("COMMITTED")){
 			finalDecision = "COMMIT";
+			log("Reached commit stage aaaaa");
+			commit();
+		}
 		else
 			conf.logger.severe("Reached sendFinalDecision without having decided! Final State "+myState);
 		Long start = System.currentTimeMillis();
@@ -596,7 +622,7 @@ public class Participant {
 				while(it.hasNext()){
 					List<String> s = it.next();
 					if(s.get(1).equals("FINALDECISION_REQ")){
-						if(isAbort)
+						if((myState.equals("ABORTED")))
 							nc.sendMsg(Integer.parseInt(s.get(0)),"ABORT");
 						else
 							nc.sendMsg(Integer.parseInt(s.get(0)),"COMMIT");
@@ -686,6 +712,7 @@ public class Participant {
 			for(int i=0;i<conf.numProcesses;i++)
 				dtlog.write(UP[i]+",");
 			dtlog.write("\t"+myVoteStr);
+			dtlog.write("\t"+command+"\t"+param1+"\t"+param2);
 			dtlog.write("\n");
 			dtlog.flush();
 		} catch (IOException e) {
@@ -756,7 +783,6 @@ public class Participant {
 					log("I am commiting after total failure maybe");
 					myState = "COMMITTED";
 					DTLogWrite("COMMIT");
-					commit();
 					it.remove();
 					waitingforStateReq=false;
 				}
@@ -764,7 +790,6 @@ public class Participant {
 					log("I am aborting after total failure maybe");
 					myState = "ABORTED";
 					DTLogWrite("ABORT");
-					abort();
 					it.remove();
 					waitingforStateReq=false;
 				}
@@ -806,6 +831,7 @@ public class Participant {
 						DTLogWrite("ABORT");
 						log("ABORTING");
 						it.remove();
+						sendFinalDecision(true);
 						return;
 					}
 					else if (msg.equals("COMMIT")){
@@ -813,6 +839,7 @@ public class Participant {
 						myState = "COMMITTED";
 						log("COMMITING");
 						it.remove();
+						sendFinalDecision(false);
 						return;
 					}
 					else if(msg.equals("PRECOMMIT")){
@@ -841,6 +868,7 @@ public class Participant {
 										log("Committing");
 										myState = "COMMITTED";
 										it1.remove();
+										sendFinalDecision(false);
 										return;
 									}
 									else{
@@ -877,7 +905,7 @@ public class Participant {
 			broadcast("ABORT");
 			myState ="ABORTED";
 			isAbort=true;
-			abort();
+			//abort();
 		}
 		else if(Arrays.asList(states).contains("COMMITTED")){
 			log("Some process has already comitted");
@@ -888,7 +916,7 @@ public class Participant {
 			//	if(0==1) break;
 			//}
 			myState="COMMITTED";
-			commit();
+			//commit();
 		}
 		else {
 			Boolean ifAllUncertain = true;
@@ -902,7 +930,7 @@ public class Participant {
 				broadcast("ABORT");
 				myState="ABORTED";
 				isAbort=true;
-				abort();
+				//abort();
 			}
 			else{
 				log("Some processes were committable");

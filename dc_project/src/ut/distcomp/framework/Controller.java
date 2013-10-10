@@ -183,6 +183,7 @@ public class Controller {
 				}
 				else if(s.get(1).equals("ABORT")){
 					host_conf.logger.info("Command Aborted");
+					receivedResponse = true;
 				/* }else if(s.get(1).equals("FAILING")){
 					if(s.get(0).equals("1"))
 						currentCoordinator = 2;

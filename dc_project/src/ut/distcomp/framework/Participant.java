@@ -235,6 +235,7 @@ public class Participant {
 		Boolean sendUPString = false;
 		Boolean totalFailureDetected = false;
 		Boolean finalDecisionReceived = false;
+		Boolean isLastRun = false;
 		while(true){
 			sendUPString = false;
 			Thread.sleep(delay);
@@ -313,7 +314,18 @@ public class Participant {
 						}
 					}
 					else if(s.get(1).equals("STATE_REQ")){
-						it.remove();
+						if(totalFailureDetected){
+							if(myState.equals("ABORTED"))
+								nc.sendMsg(Integer.parseInt(s.get(0)), "ABORTED");
+							else if(myState.equals("COMMITTED"))
+								nc.sendMsg(Integer.parseInt(s.get(0)), "COMMITTED");
+						}
+						if(!failurePoint.equals("EXTRA_CREDIT")){
+							log("Dropping STATE_REQ");
+							it.remove();
+						}
+						else
+							log("Not Dropping STATE_REQ");
 					}
 					else{
 						;
@@ -328,16 +340,28 @@ public class Participant {
 				broadcast(lastString);
 			}
 			failHere("PARTICIPANT_RECOVERY");
-			if(totalFailureDetected || finalDecisionReceived)
-				break;
+			if((totalFailureDetected || finalDecisionReceived)){
+				if(isLastRun)
+					break;
+				else
+					isLastRun=true;
+			}
 		}
 
 		if(totalFailureDetected){
-			if(myState.equals("COMMITTED") || myState.equals("ABORTED"))
-				conf.logger.severe("Should not have been in TOTAL FAILURE");
-			for(int i =0;i<UP.length;i++)
-				UP[i] = zombie[i];
-			electionProtocol();
+			if(myState.equals("COMMITTED") || myState.equals("ABORTED")){
+				if(myState.equals("COMMITTED"))
+					sendFinalDecision(false);
+				else if(myState.equals("ABORTED"))
+					sendFinalDecision(true);
+				else
+					conf.logger.severe("Invalid state at end of participant recovery");
+			}
+			else{
+				for(int i =0;i<UP.length;i++)
+					UP[i] = zombie[i];
+				electionProtocol();
+			}
 		}
 		else{
 			if(myState.equals("COMMITTED"))
@@ -560,7 +584,8 @@ public class Participant {
 			log("Decided PRECOMMIT");
 			Boolean[] recipients = new Boolean[conf.numProcesses];
 			for(int i=0;i<conf.numProcesses;i++)
-				if(i<conf.numProcesses/2)
+				//if(i<conf.numProcesses/2)
+				if(i<3)
 					recipients[i]=true;
 				else
 					recipients[i]=false;
@@ -585,7 +610,8 @@ public class Participant {
 		log("Decided COMMIT");
 		Boolean[] recipients = new Boolean[conf.numProcesses];
 		for(int i=0;i<conf.numProcesses;i++)
-			if(i<conf.numProcesses/2)
+			//if(i<conf.numProcesses/2)
+			if(i<3)
 				recipients[i]=true;
 			else
 				recipients[i]=false;
@@ -656,6 +682,12 @@ public class Participant {
 					}
 				}
 			}
+		}
+		if(getCoordinator()==conf.procNum){
+			if((myState.equals("ABORTED")))
+				nc.sendMsg(0,"ABORT");
+			else
+				nc.sendMsg(0,"COMMIT");
 		}
 		log("Reached end of sendFinalDecision");
 	}
@@ -734,6 +766,8 @@ public class Participant {
 
 	static void DTLogWrite(String msg){
 		try {
+//			if(msg.equals("PRECOMMIT"))
+//				return;
 			dtlog.write(msg+"\t"+getCoordinator()+"\t");
 			for(int i=0;i<conf.numProcesses;i++)
 				dtlog.write(UP[i]+",");
@@ -775,7 +809,7 @@ public class Participant {
 		Boolean waitingforStateReq = true;
 		while(waitingforStateReq){
 			Thread.sleep(delay);
-			if(System.currentTimeMillis()-start > timeOut){
+			if(System.currentTimeMillis()-start > 2*timeOut){
 				log("Timed out on "+getCoordinator()+ " waiting for STATE_REQ");;
 				UP[getCoordinator()]=0;
 				electionProtocol();
@@ -987,23 +1021,43 @@ public class Participant {
 				log("Some processes were committable");
 				Boolean isAnyUncertain = false;
 				Boolean[] recipients = new Boolean[conf.numProcesses];
-				for(int i=1;i<conf.numProcesses;i++)
-					if(states[i].equals("UNCERTAIN")){
-						recipients[i] = true;
-						isAnyUncertain = true;
+				if(!failurePoint.equals("ELECTED_COORDINATOR_PARTIAL_PRECOMMIT")){
+					for(int i=1;i<conf.numProcesses;i++)
+						if(states[i].equals("UNCERTAIN")){
+							recipients[i] = true;
+							isAnyUncertain = true;
+						}
+						else
+							recipients[i] = false;
+					if(isAnyUncertain){ 
+						failHere("ELECTED_COORDINATOR_BEFORE_PRECOMMIT");
+						multicast("PRECOMMIT", recipients);
+						List<String> exp = new ArrayList<String>();
+						exp.add("ACK");
+						collectResults(exp,"ACK");
 					}
-					else
-						recipients[i] = false;
-				if(isAnyUncertain){ 
-					multicast("PRECOMMIT", recipients);
-					List<String> exp = new ArrayList<String>();
-					exp.add("ACK");
-					collectResults(exp,"ACK");
 				}
-
+				else{
+					for(int i=1;i<conf.numProcesses;i++)
+						if(states[i].equals("UNCERTAIN") && i < 4){
+							recipients[i] = true;
+							isAnyUncertain = true;
+						}
+						else
+							recipients[i] = false;
+					if(isAnyUncertain){ 
+						failHere("ELECTED_COORDINATOR_BEFORE_PRECOMMIT");
+						multicast("PRECOMMIT", recipients);
+						failHere("ELECTED_COORDINATOR_PARTIAL_PRECOMMIT");
+						List<String> exp = new ArrayList<String>();
+						exp.add("ACK");
+						collectResults(exp,"ACK");
+					}
+				}
 				myState="COMMITABLE";
 				DTLogWrite("COMMIT");
 				myState="COMMITTED";
+				failHere("ELECTED_COORDINATOR_BEFORE_COMMIT");
 				broadcast("COMMIT");
 			}
 		}

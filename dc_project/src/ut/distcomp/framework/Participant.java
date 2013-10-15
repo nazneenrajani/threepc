@@ -465,8 +465,8 @@ public class Participant {
 						DTLogWrite("PRECOMMIT");
 						log("Received PRECOMMIT");
 						myState = "COMMITABLE";
-						failHere("BEFORE_COMMIT");
 						nc.sendMsg(getCoordinator(), "ACK");
+						failHere("BEFORE_COMMIT");
 						it.remove();
 						long start1 = System.currentTimeMillis();
 						while(true){
@@ -646,7 +646,7 @@ public class Participant {
 		else
 			conf.logger.severe("Reached sendFinalDecision without having decided! Final State "+myState);
 		Long start = System.currentTimeMillis();
-		while(System.currentTimeMillis() - start < 2*timeOut){
+		while(System.currentTimeMillis() - start < 5*timeOut){
 			Thread.sleep(delay);
 			List<List<String>> recMsg =nc.getReceivedMsgs();
 			bufferedMessages.addAll(recMsg);
@@ -988,6 +988,7 @@ public class Participant {
 		Boolean isAbort=false;
 		log("Received states of participants:"+Arrays.toString(states));
 
+		DTLogWrite(returnLastLog()[0]);
 		failHere("ELECTED_COORDINATOR_FAIL_AFTER_STATE_REQ");
 		if(Arrays.asList(states).contains("ABORTED")){
 			log("Some process has already aborted");

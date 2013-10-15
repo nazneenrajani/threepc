@@ -30,7 +30,7 @@ public class Controller {
 		host_conf.procNum = 0;
 		binPath = host_conf.binPath;
 		logPath = host_conf.logPath;
-		noFailuresTest();
+		//noFailuresTest();
 		//testcase2();
 		//testcase3();
 		//testcase4();
@@ -43,7 +43,7 @@ public class Controller {
 
 		//testcase9();
 		//testcase10();
-		//testcase11();
+		testcase11();
 
 		//participantFailure(); 
 		//cascadingCoordinatorFailure();
@@ -130,8 +130,8 @@ public class Controller {
 		for(int i=1;i<host_conf.numProcesses;i++)
 			errorlocations[i] = "";
 		errorlocations[1]="COMMIT";
-		errorlocations[2]="PRECOMMIT";
-		errorlocations[3]="PRECOMMIT";
+		errorlocations[2]="ELECTED_COORDINATOR_FAIL_AFTER_STATE_REQ";
+		errorlocations[3]="ELECTED_COORDINATOR_FAIL_AFTER_STATE_REQ";
 		genericFailure(errorlocations);		
 	}
 	private static void testcase11() throws IOException, InterruptedException {
@@ -168,12 +168,15 @@ public class Controller {
 			for(Process p:listParticipant){
 				if(listParticipant.indexOf(p)!=1 ){
 					try{
+						//Thread.sleep(100000);
 						System.out.println(p.exitValue());
 						System.out.println((listParticipant.indexOf(p)+1) + " Dead");
 						int index = listParticipant.indexOf(p);
+						//if(index==0||index==2){
 						host_conf.logger.info("Starting Process "+(listParticipant.indexOf(p)+1)+" Again");
 						p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + (listParticipant.indexOf(p)+1));
 						listParticipant.set(index, p);
+						//}
 					}catch(IllegalThreadStateException e){
 						continue;
 					}
@@ -493,11 +496,14 @@ public class Controller {
 			for(Process p:listParticipant){
 				try{
 					System.out.println(p.exitValue());
+					Thread.sleep(100000);
 					System.out.println((listParticipant.indexOf(p)+1) + " Dead");
 					int index = listParticipant.indexOf(p);
+					//if(index==1 || index==2){
 					host_conf.logger.info("Starting Process "+(listParticipant.indexOf(p)+1)+" Again");
 					p= Runtime.getRuntime().exec("java -cp "+ binPath +" ut.distcomp.framework.Participant " + (listParticipant.indexOf(p)+1));
 					listParticipant.set(index, p);
+					//}
 				}catch(IllegalThreadStateException e){
 					continue;
 				}
